@@ -1,15 +1,19 @@
-use std::ops::{Add, Mul, Neg};
+use std::{
+    collections::{BTreeSet, HashSet},
+    ops::{Add, Mul, Neg},
+};
 
 use rust_decimal::prelude::ToPrimitive;
 
-use crate::parse::ast::Ast;
+use crate::parse::ast::{con, Ast};
 
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub enum Expr {
     Symbol(String),
     Integer(i128),
     Fraction(i128, i128),
     Product(Vec<Expr>),
-    Sum(Vec<Expr>),
+    Sum(SumOperands),
 }
 impl Expr {
     pub fn from_ast(ast: Ast) -> Self {
@@ -41,7 +45,18 @@ impl Expr {
         }
     }
 
-    pub fn simplify_fraction(numerator: i128, denominator: i128) -> Self {
+    pub fn is_const(&self) -> bool {
+        match self {
+            Expr::Integer(_) | Expr::Fraction(_, _) => true,
+            _ => false,
+        }
+    }
+
+    fn sum<const N: usize>(const_operand: Option<Expr>, expr_operands: [Expr; N]) -> Self {
+        Self::Sum(SumOperands::new(const_operand, expr_operands))
+    }
+
+    fn simplify_fraction(numerator: i128, denominator: i128) -> Self {
         if denominator == 0 {
             panic!("Denominator cannot be zero");
         }
@@ -101,7 +116,7 @@ impl Add for Expr {
                 if l_name == r_name {
                     Expr::Product(vec![Expr::Integer(2), Expr::Symbol(l_name)])
                 } else {
-                    Expr::Sum(vec![Expr::Symbol(l_name), Expr::Symbol(r_name)])
+                    Expr::sum(None, [Expr::Symbol(l_name), Expr::Symbol(r_name)])
                 }
             }
 
@@ -114,7 +129,7 @@ impl Add for Expr {
             }
 
             (Expr::Product(l_operands), Expr::Product(r_operands)) => {
-                // if all operands except for the const operands are the same,
+                // if all non-const operands are the same,
                 // add the const operands.
                 todo!()
             }
@@ -131,13 +146,13 @@ impl Add for Expr {
                 if integer == 0 {
                     Expr::Symbol(name)
                 } else {
-                    Expr::Sum(vec![Expr::Integer(integer), Expr::Symbol(name)])
+                    Expr::sum(Some(Expr::Integer(integer)), [Expr::Symbol(name)])
                 }
             }
 
             (Expr::Symbol(name), Expr::Fraction(num, den))
             | (Expr::Fraction(num, den), Expr::Symbol(name)) => {
-                Expr::Sum(vec![Expr::Fraction(num, den), Expr::Symbol(name)])
+                Expr::sum(Some(Expr::Fraction(num, den)), [Expr::Symbol(name)])
             }
 
             (Expr::Symbol(name), Expr::Product(operands))
@@ -179,13 +194,14 @@ impl Add for Expr {
                 if integer == 0 {
                     Expr::Sum(operands)
                 } else {
-                    //
                     todo!()
                 }
             }
 
             (Expr::Fraction(num, den), Expr::Sum(operands))
-            | (Expr::Sum(operands), Expr::Fraction(num, den)) => todo!(),
+            | (Expr::Sum(operands), Expr::Fraction(num, den)) => {
+                todo!()
+            }
 
             (Expr::Product(product_operands), Expr::Sum(sum_operands))
             | (Expr::Sum(sum_operands), Expr::Product(product_operands)) => todo!(),
@@ -372,39 +388,117 @@ impl Mul for Expr {
     }
 }
 
-enum ConstOperand {
-    Integer(i128),
-    Fraction(i128, i128),
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub struct ProductOperands {
+    const_operand: Option<Box<Expr>>,
+    expr_operands: BTreeSet<Expr>,
+}
+impl ProductOperands {
+    fn new<const N: usize>(const_operand: Option<Expr>, expr_operands: [Expr; N]) -> Self {
+        ProductOperands {
+            const_operand: const_operand.map(Box::new),
+            expr_operands: BTreeSet::from(expr_operands),
+        }
+    }
 }
 
-struct SplitOperands {
-    const_operand: Option<ConstOperand>,
-    expr_operands: Vec<Expr>,
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub struct SumOperands {
+    const_operand: Option<Box<Expr>>,
+    expr_operands: BTreeSet<Expr>,
+}
+impl SumOperands {
+    fn new<const N: usize>(const_operand: Option<Expr>, expr_operands: [Expr; N]) -> Self {
+        SumOperands {
+            const_operand: const_operand.map(Box::new),
+            expr_operands: BTreeSet::from(expr_operands),
+        }
+    }
+
+    fn find_const_multiple_of(&mut self, expr: &Expr) -> Option<&Expr> {
+        self.expr_operands.iter().find(|op| {
+            if let Expr::Product(operands) = op {
+                if operands.len() == 2 {
+                    if &operands[1] == expr {
+                        if operands[0].is_const() {
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        })
+    }
+
+    /*
+    fn add(&mut self, expr: Expr) {
+        match expr {
+            Expr::Symbol(name) => {
+                let symbol = Expr::Symbol(name);
+                if self.expr_operands.contains(&symbol) {
+                    self.expr_operands.remove(&symbol);
+                    self.expr_operands
+                        .insert(Expr::Product(vec![Expr::Integer(2), symbol]));
+                } else if let Some(const_multiple) = self.find_const_multiple_of(&symbol) {
+                    self.expr_operands.remove(const_multiple);
+                    self.expr_operands
+                        .insert(const_multiple * Expr::Integer(()))
+                }
+            }
+            Expr::Integer(_) => todo!(),
+            Expr::Fraction(_, _) => todo!(),
+            Expr::Product(_) => todo!(),
+            Expr::Sum(_) => todo!(),
+        };
+    }
+    */
 }
 
-fn split_operands(operands: Vec<Expr>) -> SplitOperands {
+/*
+fn sum_operands(operands: Vec<Expr>) -> SumOperands {
     let mut const_operand = None;
-    let mut expr_operands = Vec::new();
+    let mut expr_operands = BTreeSet::new();
 
     for (i, operand) in operands.into_iter().enumerate() {
         if i == 0 {
             if let Expr::Integer(integer) = operand {
-                const_operand = Some(ConstOperand::Integer(integer));
+                const_operand = Some(Box::new(Expr::Integer(integer)));
                 continue;
             } else if let Expr::Fraction(num, den) = operand {
-                const_operand = Some(ConstOperand::Fraction(num, den));
+                const_operand = Some(Box::new(Expr::Fraction(num, den)));
                 continue;
             }
         }
 
-        expr_operands.push(operand);
+        expr_operands.insert(operand);
     }
 
-    SplitOperands {
+    SumOperands {
         const_operand,
         expr_operands,
     }
 }
+impl Add<Expr> for SumOperands {
+    type Output = Expr;
+
+    fn add(self, rhs: Expr) -> Self::Output {
+        match rhs {
+            Expr::Symbol(name) => todo!(),
+            Expr::Integer(integer) => todo!(),
+            Expr::Fraction(num, den) => todo!(),
+            Expr::Product(operands) => todo!(),
+            Expr::Sum(operands) => todo!(),
+        }
+    }
+}
+*/
 
 pub(crate) fn gcd(a: u128, b: u128) -> u128 {
     let mut a = a;
