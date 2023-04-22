@@ -1,4 +1,4 @@
-use std::ops::{Mul, Neg};
+use std::ops::{Add, Mul, Neg};
 
 use rust_decimal::prelude::ToPrimitive;
 
@@ -9,6 +9,7 @@ pub enum Expr {
     Integer(i128),
     Fraction(i128, i128),
     Product(Vec<Expr>),
+    Sum(Vec<Expr>),
 }
 impl Expr {
     pub fn from_ast(ast: Ast) -> Self {
@@ -86,7 +87,108 @@ impl Neg for Expr {
             Expr::Symbol(symbol) => Expr::Product(vec![Expr::Integer(-1), Expr::Symbol(symbol)]),
             Expr::Integer(integer) => Expr::Integer(-integer),
             Expr::Fraction(num, den) => Expr::Fraction(-num, den),
-            Expr::Product(product) => Expr::Product(product) * Expr::Integer(-1),
+            Expr::Product(operands) => Expr::Product(operands) * Expr::Integer(-1),
+            Expr::Sum(operands) => Expr::Sum(operands) * Expr::Integer(-1),
+        }
+    }
+}
+impl Add for Expr {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Expr::Symbol(l_name), Expr::Symbol(r_name)) => {
+                if l_name == r_name {
+                    Expr::Product(vec![Expr::Integer(2), Expr::Symbol(l_name)])
+                } else {
+                    Expr::Sum(vec![Expr::Symbol(l_name), Expr::Symbol(r_name)])
+                }
+            }
+
+            (Expr::Integer(l_integer), Expr::Integer(r_integer)) => {
+                Expr::Integer(l_integer + r_integer)
+            }
+
+            (Expr::Fraction(l_num, l_den), Expr::Fraction(r_num, r_den)) => {
+                Expr::simplify_fraction(l_num * r_den + r_num * l_den, l_den * r_den)
+            }
+
+            (Expr::Product(l_operands), Expr::Product(r_operands)) => {
+                // if all operands except for the const operands are the same,
+                // add the const operands.
+                todo!()
+            }
+
+            (Expr::Sum(l_operands), Expr::Sum(r_operands)) => {
+                // Add const operands.
+                // Find all like non-const operands and convert them into
+                // "2 * operand" products.
+                todo!()
+            }
+
+            (Expr::Symbol(name), Expr::Integer(integer))
+            | (Expr::Integer(integer), Expr::Symbol(name)) => {
+                if integer == 0 {
+                    Expr::Symbol(name)
+                } else {
+                    Expr::Sum(vec![Expr::Integer(integer), Expr::Symbol(name)])
+                }
+            }
+
+            (Expr::Symbol(name), Expr::Fraction(num, den))
+            | (Expr::Fraction(num, den), Expr::Symbol(name)) => {
+                Expr::Sum(vec![Expr::Fraction(num, den), Expr::Symbol(name)])
+            }
+
+            (Expr::Symbol(name), Expr::Product(operands))
+            | (Expr::Product(operands), Expr::Symbol(name)) => {
+                // If the product operands are an optional const and the symbol,
+                // increment the const. Otherwise return symbol + product.
+                todo!()
+            }
+
+            (Expr::Integer(integer), Expr::Fraction(num, den))
+            | (Expr::Fraction(num, den), Expr::Integer(integer)) => {
+                if integer == 0 {
+                    Expr::Fraction(num, den)
+                } else {
+                    Expr::simplify_fraction(num + integer * den, den)
+                }
+            }
+
+            (Expr::Integer(integer), Expr::Product(operands))
+            | (Expr::Product(operands), Expr::Integer(integer)) => {
+                if integer == 0 {
+                    Expr::Product(operands)
+                } else {
+                    //
+                    todo!()
+                }
+            }
+
+            (Expr::Fraction(num, den), Expr::Product(operands))
+            | (Expr::Product(operands), Expr::Fraction(num, den)) => {
+                todo!()
+            }
+
+            (Expr::Symbol(name), Expr::Sum(operands))
+            | (Expr::Sum(operands), Expr::Symbol(name)) => todo!(),
+
+            (Expr::Integer(integer), Expr::Sum(operands))
+            | (Expr::Sum(operands), Expr::Integer(integer)) => {
+                if integer == 0 {
+                    Expr::Sum(operands)
+                } else {
+                    //
+                    todo!()
+                }
+            }
+
+            (Expr::Fraction(num, den), Expr::Sum(operands))
+            | (Expr::Sum(operands), Expr::Fraction(num, den)) => todo!(),
+
+            (Expr::Product(product_operands), Expr::Sum(sum_operands))
+            | (Expr::Sum(sum_operands), Expr::Product(product_operands)) => todo!(),
         }
     }
 }
@@ -95,6 +197,15 @@ impl Mul for Expr {
 
     fn mul(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
+            (Expr::Symbol(l_name), Expr::Symbol(r_name)) => {
+                if l_name == r_name {
+                    // Symbol ^ 2
+                    todo!()
+                } else {
+                    Expr::Product(vec![Expr::Symbol(l_name), Expr::Symbol(r_name)])
+                }
+            }
+
             (Expr::Integer(l_integer), Expr::Integer(r_integer)) => {
                 Expr::Integer(l_integer * r_integer)
             }
@@ -113,14 +224,7 @@ impl Mul for Expr {
                 product
             }
 
-            (Expr::Symbol(l_name), Expr::Symbol(r_name)) => {
-                if l_name == r_name {
-                    // Symbol ^ 2
-                    todo!()
-                } else {
-                    Expr::Product(vec![Expr::Symbol(l_name), Expr::Symbol(r_name)])
-                }
-            }
+            (Expr::Sum(_), Expr::Sum(_)) => todo!(),
 
             (Expr::Symbol(name), Expr::Integer(integer))
             | (Expr::Integer(integer), Expr::Symbol(name)) => {
@@ -252,7 +356,53 @@ impl Mul for Expr {
                     Expr::Product(operands)
                 }
             }
+
+            (Expr::Symbol(name), Expr::Sum(operands))
+            | (Expr::Sum(operands), Expr::Symbol(name)) => todo!(),
+
+            (Expr::Integer(integer), Expr::Sum(operands))
+            | (Expr::Sum(operands), Expr::Integer(integer)) => todo!(),
+
+            (Expr::Fraction(num, den), Expr::Sum(operands))
+            | (Expr::Sum(operands), Expr::Fraction(num, den)) => todo!(),
+
+            (Expr::Product(product_operands), Expr::Sum(sum_operands))
+            | (Expr::Sum(sum_operands), Expr::Product(product_operands)) => todo!(),
         }
+    }
+}
+
+enum ConstOperand {
+    Integer(i128),
+    Fraction(i128, i128),
+}
+
+struct SplitOperands {
+    const_operand: Option<ConstOperand>,
+    expr_operands: Vec<Expr>,
+}
+
+fn split_operands(operands: Vec<Expr>) -> SplitOperands {
+    let mut const_operand = None;
+    let mut expr_operands = Vec::new();
+
+    for (i, operand) in operands.into_iter().enumerate() {
+        if i == 0 {
+            if let Expr::Integer(integer) = operand {
+                const_operand = Some(ConstOperand::Integer(integer));
+                continue;
+            } else if let Expr::Fraction(num, den) = operand {
+                const_operand = Some(ConstOperand::Fraction(num, den));
+                continue;
+            }
+        }
+
+        expr_operands.push(operand);
+    }
+
+    SplitOperands {
+        const_operand,
+        expr_operands,
     }
 }
 
