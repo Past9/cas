@@ -2,21 +2,25 @@ mod add;
 mod mul;
 mod neg;
 
-use std::ops::Neg;
+use std::collections::BTreeSet;
 
+use self::mul::ProductOperands;
+use crate::parse::ast::Ast;
 use rust_decimal::prelude::ToPrimitive;
-
-use crate::parse::ast::{con, Ast};
-
-use self::{add::SumOperands, mul::ProductOperands};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Expr {
     Symbol(String),
     Integer(i128),
     Fraction(i128, i128),
-    Product(ProductOperands),
-    Sum(SumOperands),
+    Product {
+        const_operand: Option<Box<Expr>>,
+        expr_operands: BTreeSet<Expr>,
+    },
+    Sum {
+        const_operand: Option<Box<Expr>>,
+        expr_operands: BTreeSet<Expr>,
+    },
 }
 impl Expr {
     pub fn from_ast(ast: Ast) -> Self {
@@ -48,42 +52,28 @@ impl Expr {
         }
     }
 
-    pub fn const_multiple_of(&self, expr: &Expr) -> Expr {
+    pub fn const_multiple_of(&self, expr: &Expr) -> Option<Expr> {
         match self {
-            Expr::Product(operands) => {
-                if operands.expr_operands.len() == 1 && operands.expr_operands.get(expr).is_some() {
-                    match &operands.const_operand {
-                        Some(const_operand) => (**const_operand).clone(),
-                        None => Expr::Integer(1),
+            Expr::Product {
+                const_operand,
+                expr_operands,
+            } => {
+                if expr_operands.len() == 1 && expr_operands.get(expr).is_some() {
+                    match &const_operand {
+                        Some(const_operand) => Some((**const_operand).clone()),
+                        None => Some(Expr::Integer(1)),
                     }
                 } else {
-                    Expr::Integer(0)
+                    None
                 }
             }
-            other if other == expr => Expr::Integer(1),
-            other => Expr::Integer(0),
+            other if other == expr => Some(Expr::Integer(1)),
+            _ => None,
         }
     }
 
-    pub fn const_multiple_of_symbol(&self, name: &str) -> Expr {
-        match self {
-            Expr::Product(operands) => {
-                if operands
-                    .expr_operands
-                    .get(&Expr::Symbol(name.into()))
-                    .is_some()
-                {
-                    match &operands.const_operand {
-                        Some(op) => (**op).clone(),
-                        None => Expr::Integer(1),
-                    }
-                } else {
-                    Expr::Integer(0)
-                }
-            }
-            Expr::Symbol(sym_name) if sym_name == name => Expr::Integer(1),
-            _ => Expr::Integer(0),
-        }
+    pub fn const_multiple_of_zeroed(&self, expr: &Expr) -> Expr {
+        self.const_multiple_of(expr).unwrap_or(Expr::Integer(0))
     }
 
     pub fn is_const(&self) -> bool {
@@ -94,11 +84,17 @@ impl Expr {
     }
 
     fn sum<const N: usize>(const_operand: Option<Expr>, expr_operands: [Expr; N]) -> Self {
-        Self::Sum(SumOperands::new(const_operand, expr_operands))
+        Self::Sum {
+            const_operand: const_operand.map(Box::new),
+            expr_operands: BTreeSet::from(expr_operands),
+        }
     }
 
     fn product<const N: usize>(const_operand: Option<Expr>, expr_operands: [Expr; N]) -> Self {
-        Self::Product(ProductOperands::new(const_operand, expr_operands))
+        Self::Product {
+            const_operand: const_operand.map(Box::new),
+            expr_operands: BTreeSet::from(expr_operands),
+        }
     }
 
     fn simplify_fraction(numerator: i128, denominator: i128) -> Self {
