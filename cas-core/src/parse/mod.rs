@@ -2,7 +2,11 @@ pub mod ast;
 
 use std::str::FromStr;
 
-use chumsky::{primitive::just, recursive::recursive, select, Parser, Stream};
+use chumsky::{
+    primitive::{end, just},
+    recursive::recursive,
+    select, Parser, Stream,
+};
 use rust_decimal::Decimal;
 
 use crate::{
@@ -109,6 +113,7 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
 
         add_sub
     })
+    .then_ignore(end())
 }
 
 #[cfg(test)]

@@ -1,5 +1,7 @@
 use std::{collections::BTreeSet, ops::Add};
 
+use crate::parse::ast::{con, exp};
+
 use super::{Expr, ProductOperands};
 
 impl Add for Expr {
@@ -43,16 +45,22 @@ impl Add for Expr {
                         (Some(l), Some(r)) => *l + *r,
                     };
 
-                    // If the summed const operand is 1, don't include it
-                    let const_operand = if const_operand == Expr::Integer(1) {
-                        None
+                    if const_operand == Expr::Integer(1) {
+                        if l_expr_operands.len() == 1 {
+                            l_expr_operands.into_iter().next().unwrap()
+                        } else {
+                            Expr::Product {
+                                const_operand: None,
+                                expr_operands: l_expr_operands,
+                            }
+                        }
+                    } else if const_operand == Expr::Integer(0) {
+                        Expr::Integer(0)
                     } else {
-                        Some(Box::new(const_operand))
-                    };
-
-                    Expr::Product {
-                        const_operand,
-                        expr_operands: l_expr_operands,
+                        Expr::Product {
+                            const_operand: Some(Box::new(const_operand)),
+                            expr_operands: l_expr_operands,
+                        }
                     }
                 } else {
                     Expr::sum(
@@ -81,10 +89,6 @@ impl Add for Expr {
                     expr_operands: r_expr_operands,
                 },
             ) => {
-                // Add const operands.
-                // Find all like non-const operands and convert them into
-                // "2 * operand" products.
-
                 let mut sum = Expr::Sum {
                     const_operand: l_const_operand,
                     expr_operands: l_expr_operands,
@@ -119,13 +123,13 @@ impl Add for Expr {
                 Expr::Symbol(name),
                 Expr::Product {
                     const_operand,
-                    mut expr_operands,
+                    expr_operands,
                 },
             )
             | (
                 Expr::Product {
                     const_operand,
-                    mut expr_operands,
+                    expr_operands,
                 },
                 Expr::Symbol(name),
             ) => {
@@ -138,16 +142,26 @@ impl Add for Expr {
                         Some(const_operand) => *const_operand,
                         None => Expr::Integer(1),
                     } + Expr::Integer(1);
-                    Expr::Product {
-                        const_operand: Some(Box::new(const_operand)),
-                        expr_operands: expr_operands,
+
+                    if const_operand == Expr::Integer(0) {
+                        Expr::Integer(0)
+                    } else {
+                        Expr::Product {
+                            const_operand: Some(Box::new(const_operand)),
+                            expr_operands: expr_operands,
+                        }
                     }
                 } else {
-                    expr_operands.insert(symbol);
-                    Expr::Sum {
-                        const_operand,
-                        expr_operands,
-                    }
+                    Expr::sum(
+                        None,
+                        [
+                            Expr::Product {
+                                const_operand,
+                                expr_operands,
+                            },
+                            symbol,
+                        ],
+                    )
                 }
             }
 
@@ -215,16 +229,52 @@ impl Add for Expr {
                 Expr::Symbol(name),
                 Expr::Sum {
                     const_operand,
-                    expr_operands,
+                    mut expr_operands,
                 },
             )
             | (
                 Expr::Sum {
                     const_operand,
-                    expr_operands,
+                    mut expr_operands,
                 },
                 Expr::Symbol(name),
-            ) => todo!(),
+            ) => {
+                let symbol = Expr::Symbol(name);
+
+                if expr_operands.contains(&symbol) {
+                    // If the sum contains the symbol, replace that symbol with 2 * <symbol>
+                    expr_operands.remove(&symbol);
+                    expr_operands.insert(Expr::product(Some(Expr::Integer(2)), [symbol]));
+                    Expr::Sum {
+                        const_operand,
+                        expr_operands,
+                    }
+                } else {
+                    // If any operand in the sum is a product that is a constant multiple of the symbol,
+                    // increment that constant.
+                    let mut operands = BTreeSet::new();
+                    let mut found_multiple = false;
+                    for operand in expr_operands.into_iter() {
+                        if !found_multiple && operand.const_multiple_of(&symbol).is_some() {
+                            operands.insert(operand + symbol.clone());
+                            found_multiple = true;
+                        } else {
+                            operands.insert(operand);
+                        }
+                    }
+
+                    // Otherwise, insert the symbol into the sum
+                    if !found_multiple {
+                        operands.insert(symbol);
+                    }
+
+                    Expr::Sum {
+                        const_operand,
+                        expr_operands: operands,
+                    }
+                    .simplify_sum()
+                }
+            }
 
             (
                 Expr::Integer(integer),
@@ -252,7 +302,7 @@ impl Add for Expr {
                         None => integer,
                     };
 
-                    let const_operand = if const_operand != Expr::Integer(1) {
+                    let const_operand = if const_operand != Expr::Integer(0) {
                         Some(Box::new(const_operand))
                     } else {
                         None
@@ -262,6 +312,7 @@ impl Add for Expr {
                         const_operand,
                         expr_operands: expr_operands,
                     }
+                    .simplify_sum()
                 }
             }
 
@@ -295,6 +346,7 @@ impl Add for Expr {
                     const_operand,
                     expr_operands: expr_operands,
                 }
+                .simplify_sum()
             }
 
             (
@@ -317,8 +369,380 @@ impl Add for Expr {
                     expr_operands: product_expr_operands,
                 },
             ) => {
-                todo!()
+                let mut product = Expr::Product {
+                    const_operand: product_const_operand,
+                    expr_operands: product_expr_operands,
+                };
+
+                if let Some(sum_const_operand) = sum_const_operand {
+                    product = product + *sum_const_operand;
+                }
+
+                for sum_expr_operand in sum_expr_operands.into_iter() {
+                    product = product + sum_expr_operand;
+                }
+
+                product
+
+                /*
+                sum_expr_operands.insert(Expr::Product {
+                    const_operand: product_const_operand,
+                    expr_operands: product_expr_operands,
+                });
+                Expr::Sum {
+                    const_operand: sum_const_operand,
+                    expr_operands: sum_expr_operands,
+                }
+                */
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn symbol_plus_symbol() {
+        assert_eq!(
+            Expr::from_src("x + x"),
+            Expr::product(Some(Expr::Integer(2)), [Expr::Symbol("x".into())])
+        );
+        assert_eq!(
+            Expr::from_src("x + y"),
+            Expr::sum(None, [Expr::Symbol("x".into()), Expr::Symbol("y".into())])
+        );
+    }
+
+    #[test]
+    fn integer_plus_integer() {
+        assert_eq!(Expr::from_src("1 + 1"), Expr::Integer(2));
+        assert_eq!(Expr::from_src("1 + -1"), Expr::Integer(0));
+        assert_eq!(Expr::from_src("1 - 1"), Expr::Integer(0));
+        assert_eq!(Expr::from_src("-1 + 1"), Expr::Integer(0));
+        assert_eq!(Expr::from_src("100 + 23"), Expr::Integer(123));
+        assert_eq!(Expr::from_src("-100 + 23"), Expr::Integer(-77));
+        assert_eq!(Expr::from_src("23 - 100"), Expr::Integer(-77));
+    }
+
+    #[test]
+    fn fraction_plus_fraction() {
+        assert_eq!(Expr::from_src("1.2 + 1.3"), Expr::Fraction(5, 2));
+        assert_eq!(Expr::from_src("1.2 + -1.3"), Expr::Fraction(-1, 10));
+        assert_eq!(Expr::from_src("-1.2 + 1.3"), Expr::Fraction(1, 10));
+        assert_eq!(Expr::from_src("-1.2 + 1.3"), Expr::Fraction(1, 10));
+        assert_eq!(Expr::from_src("-1.2 + -1.3"), Expr::Fraction(-5, 2));
+        assert_eq!(Expr::from_src("-1.2 - 1.3"), Expr::Fraction(-5, 2));
+        assert_eq!(Expr::from_src("1.2 + 0.8"), Expr::Integer(2));
+        assert_eq!(Expr::from_src("1.2 - 3.2"), Expr::Integer(-2));
+        assert_eq!(Expr::from_src("1.2 - 1.2"), Expr::Integer(0));
+    }
+
+    #[test]
+    fn product_plus_product() {
+        assert_eq!(
+            Expr::from_src("2 * x + 3 * x"),
+            Expr::product(Some(Expr::Integer(5)), [Expr::Symbol("x".into())])
+        );
+        assert_eq!(
+            Expr::from_src("2 * x - 3 * x"),
+            Expr::product(Some(Expr::Integer(-1)), [Expr::Symbol("x".into())])
+        );
+        assert_eq!(
+            Expr::from_src("2 * x + 3 * -x"),
+            Expr::product(Some(Expr::Integer(-1)), [Expr::Symbol("x".into())])
+        );
+        assert_eq!(
+            Expr::from_src("2 * x - 3 * -x"),
+            Expr::product(Some(Expr::Integer(5)), [Expr::Symbol("x".into())])
+        );
+        assert_eq!(
+            Expr::from_src("2 * x + x * 3"),
+            Expr::product(Some(Expr::Integer(5)), [Expr::Symbol("x".into())])
+        );
+        assert_eq!(
+            Expr::from_src("2 * x * y + 3 * y * x"),
+            Expr::product(
+                Some(Expr::Integer(5)),
+                [Expr::Symbol("x".into()), Expr::Symbol("y".into())]
+            )
+        );
+        assert_eq!(Expr::from_src("3 * x - 2 * x"), Expr::Symbol("x".into()));
+        assert_eq!(
+            Expr::from_src("3 * x * y - y * 2 * x"),
+            Expr::product(None, [Expr::Symbol("x".into()), Expr::Symbol("y".into())])
+        );
+        assert_eq!(Expr::from_src("2 * x - 2 * x"), Expr::Integer(0));
+        assert_eq!(
+            Expr::from_src("x * y + y * x"),
+            Expr::product(
+                Some(Expr::Integer(2)),
+                [Expr::Symbol("x".into()), Expr::Symbol("y".into()),]
+            )
+        );
+        assert_eq!(
+            Expr::from_src("x * y + x * z"),
+            Expr::sum(
+                None,
+                [
+                    Expr::product(None, [Expr::Symbol("x".into()), Expr::Symbol("y".into())]),
+                    Expr::product(None, [Expr::Symbol("x".into()), Expr::Symbol("z".into())])
+                ]
+            )
+        );
+        assert_eq!(
+            Expr::from_src("x * y - x * z"),
+            Expr::sum(
+                None,
+                [
+                    Expr::product(None, [Expr::Symbol("x".into()), Expr::Symbol("y".into())]),
+                    Expr::product(
+                        Some(Expr::Integer(-1)),
+                        [Expr::Symbol("x".into()), Expr::Symbol("z".into())]
+                    )
+                ]
+            )
+        );
+        assert_eq!(
+            Expr::from_src("x * 2 * y - x * z"),
+            Expr::sum(
+                None,
+                [
+                    Expr::product(
+                        Some(Expr::Integer(2)),
+                        [Expr::Symbol("x".into()), Expr::Symbol("y".into())]
+                    ),
+                    Expr::product(
+                        Some(Expr::Integer(-1)),
+                        [Expr::Symbol("x".into()), Expr::Symbol("z".into())]
+                    )
+                ]
+            )
+        );
+    }
+
+    #[test]
+    fn sum_plus_sum() {
+        assert_eq!(
+            Expr::from_src("2 + x + 3 + y"),
+            Expr::sum(
+                Some(Expr::Integer(5)),
+                [Expr::Symbol("x".into()), Expr::Symbol("y".into())]
+            )
+        );
+        assert_eq!(
+            Expr::from_src("2 + x - 3 + y"),
+            Expr::sum(
+                Some(Expr::Integer(-1)),
+                [Expr::Symbol("x".into()), Expr::Symbol("y".into())]
+            )
+        );
+        assert_eq!(
+            Expr::from_src("3 + x - 2 + y"),
+            Expr::sum(
+                Some(Expr::Integer(1)),
+                [Expr::Symbol("x".into()), Expr::Symbol("y".into())]
+            )
+        );
+        assert_eq!(
+            Expr::from_src("2 + x - 2 + y"),
+            Expr::sum(None, [Expr::Symbol("x".into()), Expr::Symbol("y".into())])
+        );
+    }
+
+    #[test]
+    fn symbol_plus_integer() {
+        assert_eq!(
+            Expr::from_src("x + 2"),
+            Expr::sum(Some(Expr::Integer(2)), [Expr::Symbol("x".into())])
+        );
+        assert_eq!(Expr::from_src("x + 0"), Expr::Symbol("x".into()));
+        assert_eq!(Expr::from_src("x - 0"), Expr::Symbol("x".into()));
+        assert_eq!(Expr::from_src("0 + x"), Expr::Symbol("x".into()));
+    }
+
+    #[test]
+    fn symbol_plus_fraction() {
+        assert_eq!(
+            Expr::from_src("x + 1.2"),
+            Expr::sum(Some(Expr::Fraction(6, 5)), [Expr::Symbol("x".into())])
+        );
+        assert_eq!(
+            Expr::from_src("x - 1.2"),
+            Expr::sum(Some(Expr::Fraction(-6, 5)), [Expr::Symbol("x".into())])
+        );
+    }
+
+    #[test]
+    fn symbol_plus_product() {
+        assert_eq!(
+            Expr::from_src("x + y * z"),
+            Expr::sum(
+                None,
+                [
+                    Expr::Symbol("x".into()),
+                    Expr::product(None, [Expr::Symbol("y".into()), Expr::Symbol("z".into()),])
+                ]
+            )
+        );
+        assert_eq!(
+            Expr::from_src("x + 2 * x"),
+            Expr::product(Some(Expr::Integer(3)), [Expr::Symbol("x".into()),])
+        );
+        assert_eq!(
+            Expr::from_src("x - 2 * x"),
+            Expr::product(Some(Expr::Integer(-1)), [Expr::Symbol("x".into()),])
+        );
+        assert_eq!(
+            Expr::from_src("x + 2 * -x"),
+            Expr::product(Some(Expr::Integer(-1)), [Expr::Symbol("x".into()),])
+        );
+        assert_eq!(Expr::from_src("x + x + -2 * x"), Expr::Integer(0));
+    }
+
+    #[test]
+    fn integer_plus_fraction() {
+        assert_eq!(Expr::from_src("2 + 1.2"), Expr::Fraction(16, 5));
+        assert_eq!(Expr::from_src("2 - 1.2"), Expr::Fraction(4, 5));
+        assert_eq!(Expr::from_src("-2 + 1.2"), Expr::Fraction(-4, 5));
+        assert_eq!(Expr::from_src("-2 - 1.2"), Expr::Fraction(-16, 5));
+        assert_eq!(Expr::from_src("1.2 - 1.2"), Expr::Integer(0));
+        assert_eq!(Expr::from_src("1.8 + 1.2"), Expr::Integer(3));
+        assert_eq!(Expr::from_src("-1.8 + -1.2"), Expr::Integer(-3));
+        assert_eq!(Expr::from_src("-1.8 - 1.2"), Expr::Integer(-3));
+    }
+
+    #[test]
+    fn integer_plus_product() {
+        assert_eq!(
+            Expr::from_src("2 + x * y"),
+            Expr::sum(
+                Some(Expr::Integer(2)),
+                [Expr::product(
+                    None,
+                    [Expr::Symbol("x".into()), Expr::Symbol("y".into()),]
+                )]
+            )
+        );
+        assert_eq!(
+            Expr::from_src("0 + x * y"),
+            Expr::product(None, [Expr::Symbol("x".into()), Expr::Symbol("y".into()),])
+        );
+        assert_eq!(
+            Expr::from_src("2 + 2 * x"),
+            Expr::sum(
+                Some(Expr::Integer(2)),
+                [Expr::product(
+                    Some(Expr::Integer(2)),
+                    [Expr::Symbol("x".into()),]
+                )]
+            )
+        );
+        assert_eq!(
+            Expr::from_src("0 + 2 * x"),
+            Expr::product(Some(Expr::Integer(2)), [Expr::Symbol("x".into()),])
+        );
+    }
+
+    #[test]
+    fn fraction_plus_product() {
+        assert_eq!(
+            Expr::from_src("1.2 + x * y"),
+            Expr::sum(
+                Some(Expr::Fraction(6, 5)),
+                [Expr::product(
+                    None,
+                    [Expr::Symbol("x".into()), Expr::Symbol("y".into()),]
+                )]
+            )
+        );
+    }
+
+    #[test]
+    fn symbol_plus_sum() {
+        assert_eq!(
+            Expr::from_src("2 + x + y"),
+            Expr::sum(
+                Some(Expr::Integer(2)),
+                [Expr::Symbol("x".into()), Expr::Symbol("y".into()),]
+            )
+        );
+        assert_eq!(
+            Expr::from_src("2 + x + x"),
+            Expr::sum(
+                Some(Expr::Integer(2)),
+                [Expr::product(
+                    Some(Expr::Integer(2)),
+                    [Expr::Symbol("x".into())]
+                )]
+            )
+        );
+        assert_eq!(Expr::from_src("2 - x + x"), Expr::Integer(2));
+        assert_eq!(Expr::from_src("2 - x + x + -x + x"), Expr::Integer(2));
+    }
+
+    #[test]
+    fn integer_plus_sum() {
+        assert_eq!(
+            Expr::from_src("2 + x + 2"),
+            Expr::sum(Some(Expr::Integer(4)), [Expr::Symbol("x".into())])
+        );
+        assert_eq!(Expr::from_src("2 + x - 2"), Expr::Symbol("x".into()));
+        assert_eq!(
+            Expr::from_src("2 + x + y - 2"),
+            Expr::sum(None, [Expr::Symbol("x".into()), Expr::Symbol("y".into())])
+        );
+    }
+
+    #[test]
+    fn fraction_plus_sum() {
+        assert_eq!(
+            Expr::from_src("1.2 + x + 1.2"),
+            Expr::sum(Some(Expr::Fraction(12, 5)), [Expr::Symbol("x".into())])
+        );
+        assert_eq!(Expr::from_src("1.2 + x - 1.2"), Expr::Symbol("x".into()));
+        assert_eq!(
+            Expr::from_src("1.2 + x + y - 1.2"),
+            Expr::sum(None, [Expr::Symbol("x".into()), Expr::Symbol("y".into())])
+        );
+    }
+
+    #[test]
+    fn product_plus_sum() {
+        assert_eq!(
+            Expr::from_src("w + x + y * z"),
+            Expr::sum(
+                None,
+                [
+                    Expr::Symbol("w".into()),
+                    Expr::Symbol("x".into()),
+                    Expr::product(None, [Expr::Symbol("y".into()), Expr::Symbol("z".into()),])
+                ]
+            )
+        );
+
+        assert_eq!(
+            Expr::from_src("x + y + 2 * x"),
+            Expr::sum(
+                None,
+                [
+                    Expr::product(Some(Expr::Integer(3)), [Expr::Symbol("x".into())]),
+                    Expr::Symbol("y".into()),
+                ]
+            )
+        );
+
+        panic!("Below results in stack overflow");
+        assert_eq!(
+            Expr::from_src("2 * x + y + 2 * x"),
+            Expr::sum(
+                None,
+                [
+                    Expr::product(Some(Expr::Integer(4)), [Expr::Symbol("x".into())]),
+                    Expr::Symbol("y".into()),
+                ]
+            )
+        );
     }
 }
