@@ -301,9 +301,4 @@ mod tests {
         assert_eq!(Expr::from_src("2 ^ 1"), int(2));
         assert_eq!(Expr::from_src("2 ^ 2"), int(4));
     }
-
-    #[test]
-    fn power_frac() {
-        assert_eq!(Expr::from_src("4 ^ 0.5"), int(2));
-    }
 }

@@ -169,7 +169,6 @@ impl Power {
         match &exponent {
             Expr::Constant(constant) => {
                 if constant.is_int() {
-                    println!("IS INT");
                     let int = constant.clone().expect_int();
                     match base {
                         Expr::Symbol(symbol) => IntegerPower {
