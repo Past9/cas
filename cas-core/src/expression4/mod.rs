@@ -8,13 +8,12 @@ mod symbol;
 use self::{
     constant::Constant,
     factorial::Factorial,
-    power::{IntegerPowerBase, Power},
+    power::{IntegerPowerBase, NonIntegerPowerExponent, Power},
     product::{Factor, Product},
     sum::{Addend, Sum},
     symbol::Symbol,
 };
 use crate::parse::{ast::Ast, parse_src};
-use num::{BigInt, BigRational, FromPrimitive};
 use vec1::vec1;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -300,6 +299,17 @@ impl Expr {
             _ => panic!("Cannot make integer power base: {:?}", self),
         }
     }
+
+    fn expect_non_integer_power_exponent(self) -> NonIntegerPowerExponent {
+        match self {
+            Expr::Symbol(symbol) => symbol.into(),
+            Expr::Constant(constant) => constant.into(),
+            Expr::Sum(sum) => sum.into(),
+            Expr::Product(product) => product.into(),
+            Expr::Power(power) => power.into(),
+            Expr::Factorial(factorial) => factorial.into(),
+        }
+    }
 }
 
 pub(crate) mod unenforced_helpers {
@@ -308,34 +318,42 @@ pub(crate) mod unenforced_helpers {
         symbol::Symbol, Expr,
     };
 
+    #[allow(dead_code)]
     pub fn int(value: i128) -> Expr {
         Constant::unenforced_int(value)
     }
 
+    #[allow(dead_code)]
     pub fn frac(num: i128, den: i128) -> Expr {
         Constant::unenforced_frac(num, den)
     }
 
+    #[allow(dead_code)]
     pub fn sym(name: &str) -> Expr {
         Symbol::unenforced(name.into())
     }
 
+    #[allow(dead_code)]
     pub fn factorial(expr: Expr) -> Expr {
         Factorial::unenforced(expr)
     }
 
+    #[allow(dead_code)]
     pub fn product<const N: usize>(factors: [Expr; N]) -> Expr {
         Product::unenforced(Vec::from(factors))
     }
 
+    #[allow(dead_code)]
     pub fn sum<const N: usize>(addends: [Expr; N]) -> Expr {
         Sum::unenforced(Vec::from(addends))
     }
 
+    #[allow(dead_code)]
     pub fn pow(base: Expr, exponent: Expr) -> Expr {
         Power::unenforced(base, exponent)
     }
 
+    #[allow(dead_code)]
     pub fn powi(base: Expr, exponent: i128) -> Expr {
         Power::unenforced_int(base, exponent)
     }

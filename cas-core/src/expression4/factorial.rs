@@ -1,6 +1,4 @@
-use std::ops::Sub;
-
-use num::{BigInt, BigUint};
+use num::BigUint;
 use vec1::vec1;
 
 use super::{constant::Constant, product::Product, Expr};

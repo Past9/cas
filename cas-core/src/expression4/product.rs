@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use vec1::vec1;
 
 use num::BigInt;
@@ -101,10 +100,7 @@ impl Product {
     }
 
     pub fn power_int(self, exponent: BigInt) -> Expr {
-        let Self {
-            mut constant,
-            factors,
-        } = self;
+        let Self { constant, factors } = self;
 
         let mut expr = constant.power_int(exponent).as_expr();
 

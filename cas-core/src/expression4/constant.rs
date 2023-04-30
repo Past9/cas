@@ -1,7 +1,7 @@
 use num::{traits::Pow, BigInt, BigRational, BigUint, FromPrimitive, One, Signed, Zero};
 use rust_decimal::Decimal;
 
-use super::{factorial::Factorial, Expr};
+use super::Expr;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ConstantKind {
@@ -88,6 +88,14 @@ impl Constant {
             }
         } else {
             panic!("Constant {:?} is not an integer", self)
+        }
+    }
+
+    pub fn expect_frac(self) -> BigRational {
+        if let ConstantKind::Fraction(frac) = self.kind {
+            frac
+        } else {
+            panic!("Constant {:?} is not a fraction", self)
         }
     }
 
@@ -283,5 +291,19 @@ mod tests {
             Constant::from_i128_frac(-1, 2).reciprocal().as_expr(),
             int(-2)
         );
+    }
+
+    #[test]
+    fn power_int() {
+        assert_eq!(Expr::from_src("2 ^ -2"), frac(1, 4));
+        assert_eq!(Expr::from_src("2 ^ -1"), frac(1, 2));
+        assert_eq!(Expr::from_src("2 ^ 0"), int(1));
+        assert_eq!(Expr::from_src("2 ^ 1"), int(2));
+        assert_eq!(Expr::from_src("2 ^ 2"), int(4));
+    }
+
+    #[test]
+    fn power_frac() {
+        assert_eq!(Expr::from_src("4 ^ 0.5"), int(2));
     }
 }

@@ -78,7 +78,7 @@ impl From<Factorial> for IntegerPowerBase {
 #[derive(Debug, PartialEq, Eq)]
 struct NonIntegerPower {
     base: Box<Expr>,
-    power: Box<Expr>,
+    exponent: Box<NonIntegerPowerExponent>,
 }
 impl NonIntegerPower {
     pub fn as_expr(self) -> Expr {
@@ -86,16 +86,60 @@ impl NonIntegerPower {
     }
 
     pub fn as_exprs(self) -> (Expr, Expr) {
-        (*self.base, *self.power)
+        (*self.base, self.exponent.as_expr())
     }
 }
 
-enum NonIntegerPowerExponent {
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum NonIntegerPowerExponent {
+    Symbol(Symbol),
     Fraction(BigRational),
     Sum(Sum),
     Product(Product),
     Power(Power),
     Factorial(Factorial),
+}
+impl NonIntegerPowerExponent {
+    pub fn as_expr(self) -> Expr {
+        match self {
+            NonIntegerPowerExponent::Symbol(symbol) => symbol.as_expr(),
+            NonIntegerPowerExponent::Fraction(fraction) => Constant::from_frac(fraction).as_expr(),
+            NonIntegerPowerExponent::Sum(sum) => sum.as_expr(),
+            NonIntegerPowerExponent::Product(product) => product.as_expr(),
+            NonIntegerPowerExponent::Power(power) => power.as_expr(),
+            NonIntegerPowerExponent::Factorial(factorial) => factorial.as_expr(),
+        }
+    }
+}
+impl From<Symbol> for NonIntegerPowerExponent {
+    fn from(value: Symbol) -> Self {
+        Self::Symbol(value)
+    }
+}
+impl From<Constant> for NonIntegerPowerExponent {
+    fn from(value: Constant) -> Self {
+        Self::Fraction(value.expect_frac())
+    }
+}
+impl From<Sum> for NonIntegerPowerExponent {
+    fn from(value: Sum) -> Self {
+        Self::Sum(value)
+    }
+}
+impl From<Product> for NonIntegerPowerExponent {
+    fn from(value: Product) -> Self {
+        Self::Product(value)
+    }
+}
+impl From<Power> for NonIntegerPowerExponent {
+    fn from(value: Power) -> Self {
+        Self::Power(value)
+    }
+}
+impl From<Factorial> for NonIntegerPowerExponent {
+    fn from(value: Factorial) -> Self {
+        Self::Factorial(value)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -116,7 +160,7 @@ impl Power {
         Expr::Power(Power {
             kind: PowerKind::NonIntegerPower(NonIntegerPower {
                 base: Box::new(base),
-                power: Box::new(exponent),
+                exponent: Box::new(exponent.expect_non_integer_power_exponent()),
             }),
         })
     }
@@ -125,6 +169,7 @@ impl Power {
         match &exponent {
             Expr::Constant(constant) => {
                 if constant.is_int() {
+                    println!("IS INT");
                     let int = constant.clone().expect_int();
                     match base {
                         Expr::Symbol(symbol) => IntegerPower {
@@ -152,14 +197,14 @@ impl Power {
                 } else {
                     NonIntegerPower {
                         base: Box::new(base),
-                        power: Box::new(exponent),
+                        exponent: Box::new(exponent.expect_non_integer_power_exponent()),
                     }
                     .as_expr()
                 }
             }
             _ => NonIntegerPower {
                 base: Box::new(base),
-                power: Box::new(exponent),
+                exponent: Box::new(exponent.expect_non_integer_power_exponent()),
             }
             .as_expr(),
         }

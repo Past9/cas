@@ -2,7 +2,7 @@ mod error;
 mod expression;
 mod expression2;
 mod expression3;
-mod expression4;
+pub mod expression4;
 mod parse;
 mod tokenize;
 
