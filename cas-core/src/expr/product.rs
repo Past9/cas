@@ -7,7 +7,7 @@ use super::{
     constant::Constant, factorial::Factorial, power::Power, sum::Sum, symbol::Symbol, Expr,
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Product {
     constant: Constant,
     factors: Vec1<Factor>,
@@ -29,11 +29,11 @@ impl Product {
         })
     }
 
-    pub fn new(constant: Constant, mut factors: Vec1<Factor>) -> Expr {
+    pub fn new(constant: Constant, factors: Vec1<Factor>) -> Expr {
         if constant.is_zero() {
             Constant::zero().as_expr()
         } else if constant.is_one() && factors.len() == 1 {
-            factors.swap_remove(0).unwrap().as_expr()
+            factors.into_iter().next().unwrap().as_expr()
         } else {
             Self { constant, factors }.as_expr()
         }
@@ -57,6 +57,9 @@ impl Product {
         } = self;
 
         let (constant, factors) = match rhs {
+            Expr::Undefined => {
+                return Expr::Undefined;
+            }
             Expr::Symbol(symbol) => {
                 self_factors.push(symbol.into());
                 (self_constant, self_factors)
@@ -102,17 +105,20 @@ impl Product {
     pub fn power_int(self, exponent: BigInt) -> Expr {
         let Self { constant, factors } = self;
 
-        let mut expr = constant.power_int(exponent).as_expr();
+        let mut expr = constant.power_int(exponent.clone()).as_expr();
 
         for factor in factors.into_iter() {
-            expr = expr.multiply(factor.as_expr());
+            expr = expr.multiply(Power::new(
+                factor.as_expr(),
+                Constant::from_int(exponent.clone()).as_expr(),
+            ));
         }
 
         expr
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Factor {
     Symbol(Symbol),
     Sum(Sum),

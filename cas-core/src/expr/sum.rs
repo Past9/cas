@@ -1,23 +1,26 @@
 use vec1::{vec1, Vec1};
 
+use crate::operands;
+
 use super::{
     constant::Constant, factorial::Factorial, power::Power, product::Product, symbol::Symbol, Expr,
+    Operands,
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Sum {
     constant: Constant,
-    addends: Vec1<Addend>,
+    addends: Operands<Addend>,
 }
 impl Sum {
     pub(crate) fn unenforced(addends: Vec<Expr>) -> Expr {
         let mut iter = addends.into_iter();
 
         let constant = iter.next().unwrap().expect_constant();
-        let mut new_addends: Vec1<Addend> = vec1![iter.next().unwrap().expect_addend()];
+        let mut new_addends: Operands<Addend> = operands![iter.next().unwrap().expect_addend()];
 
         for addend in iter {
-            new_addends.push(addend.expect_addend());
+            new_addends.insert(addend.expect_addend());
         }
 
         Expr::Sum(Self {
@@ -26,9 +29,9 @@ impl Sum {
         })
     }
 
-    pub fn new(constant: Constant, mut addends: Vec1<Addend>) -> Expr {
+    pub(crate) fn new(constant: Constant, addends: Operands<Addend>) -> Expr {
         if constant.is_zero() && addends.len() == 1 {
-            return addends.swap_remove(0).unwrap().as_expr();
+            return addends.take_first().as_expr();
         } else {
             Self { constant, addends }.as_expr()
         }
@@ -49,8 +52,11 @@ impl Sum {
         } = self;
 
         let (constant, addends) = match rhs {
+            Expr::Undefined => {
+                return Expr::Undefined;
+            }
             Expr::Symbol(symbol) => {
-                self_addends.push(symbol.into());
+                self_addends.insert(symbol.into());
                 (self_constant, self_addends)
             }
             Expr::Constant(constant) => (self_constant.add(constant), self_addends),
@@ -75,15 +81,15 @@ impl Sum {
                 return lhs;
             }
             Expr::Product(product) => {
-                self_addends.push(product.into());
+                self_addends.insert(product.into());
                 (self_constant, self_addends)
             }
             Expr::Power(power) => {
-                self_addends.push(power.into());
+                self_addends.insert(power.into());
                 (self_constant, self_addends)
             }
             Expr::Factorial(factorial) => {
-                self_addends.push(factorial.into());
+                self_addends.insert(factorial.into());
                 (self_constant, self_addends)
             }
         };
@@ -92,7 +98,7 @@ impl Sum {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Addend {
     Symbol(Symbol),
     Product(Product),
@@ -127,5 +133,21 @@ impl From<Power> for Addend {
 impl From<Factorial> for Addend {
     fn from(value: Factorial) -> Self {
         Addend::Factorial(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::expr::{
+        unenforced_helpers::{int, sum, sym},
+        Expr,
+    };
+
+    #[test]
+    fn combines_sums() {
+        assert_eq!(
+            Expr::from_src("2 + x + 3 + y + z"),
+            sum([int(5), sym("x"), sym("y"), sym("z")])
+        );
     }
 }

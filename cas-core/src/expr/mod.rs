@@ -5,6 +5,9 @@ mod product;
 mod sum;
 mod symbol;
 
+use crate::operands;
+use std::collections::{btree_set::IntoIter, BTreeSet};
+
 use self::{
     constant::Constant,
     factorial::Factorial,
@@ -16,8 +19,9 @@ use self::{
 use crate::parse::{ast::Ast, parse_src};
 use vec1::vec1;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Expr {
+    Undefined,
     Symbol(Symbol),
     Constant(Constant),
     Sum(Sum),
@@ -33,6 +37,7 @@ impl Expr {
 
     pub fn from_ast(ast: Ast) -> Self {
         match ast {
+            Ast::Undefined => Self::Undefined,
             Ast::Symbol(name) => Symbol::new(name).as_expr(),
             Ast::Constant(constant) => Constant::from_dec(constant).as_expr(),
             Ast::UnaryOp(unary) => match unary.op {
@@ -64,71 +69,72 @@ impl Expr {
             (Expr::Constant(l), Expr::Constant(r)) => l.add(r).as_expr(),
 
             (Expr::Symbol(l), Expr::Symbol(r)) => {
-                Sum::new(Constant::zero(), vec1![l.into(), r.into()])
+                Sum::new(Constant::zero(), operands![l.into(), r.into()])
             }
 
             (Expr::Product(l), Expr::Product(r)) => {
-                Sum::new(Constant::zero(), vec1![l.into(), r.into()])
+                Sum::new(Constant::zero(), operands![l.into(), r.into()])
             }
 
             (Expr::Power(l), Expr::Power(r)) => {
-                Sum::new(Constant::zero(), vec1![l.into(), r.into()])
+                Sum::new(Constant::zero(), operands![l.into(), r.into()])
             }
 
             (Expr::Factorial(l), Expr::Factorial(r)) => {
-                Sum::new(Constant::zero(), vec1![l.into(), r.into()])
+                Sum::new(Constant::zero(), operands![l.into(), r.into()])
             }
 
             (Expr::Sum(l), Expr::Sum(r)) => l.add(r.as_expr()),
 
             (Expr::Symbol(symbol), Expr::Constant(constant))
             | (Expr::Constant(constant), Expr::Symbol(symbol)) => {
-                Sum::new(constant, vec1![symbol.into()])
+                Sum::new(constant, operands![symbol.into()])
             }
 
             (Expr::Symbol(symbol), Expr::Product(product))
             | (Expr::Product(product), Expr::Symbol(symbol)) => {
-                Sum::new(Constant::zero(), vec1![symbol.into(), product.into()])
+                Sum::new(Constant::zero(), operands![symbol.into(), product.into()])
             }
 
             (Expr::Symbol(symbol), Expr::Power(power))
             | (Expr::Power(power), Expr::Symbol(symbol)) => {
-                Sum::new(Constant::zero(), vec1![symbol.into(), power.into()])
+                Sum::new(Constant::zero(), operands![symbol.into(), power.into()])
             }
 
             (Expr::Symbol(symbol), Expr::Factorial(factorial))
             | (Expr::Factorial(factorial), Expr::Symbol(symbol)) => {
-                Sum::new(Constant::zero(), vec1![symbol.into(), factorial.into()])
+                Sum::new(Constant::zero(), operands![symbol.into(), factorial.into()])
             }
 
             (Expr::Constant(constant), Expr::Product(product))
             | (Expr::Product(product), Expr::Constant(constant)) => {
-                Sum::new(constant, vec1![product.into()])
+                Sum::new(constant, operands![product.into()])
             }
 
             (Expr::Constant(constant), Expr::Power(power))
             | (Expr::Power(power), Expr::Constant(constant)) => {
-                Sum::new(constant, vec1![power.into()])
+                Sum::new(constant, operands![power.into()])
             }
 
             (Expr::Constant(constant), Expr::Factorial(factorial))
             | (Expr::Factorial(factorial), Expr::Constant(constant)) => {
-                Sum::new(constant, vec1![factorial.into()])
+                Sum::new(constant, operands![factorial.into()])
             }
 
             (Expr::Product(product), Expr::Power(power))
             | (Expr::Power(power), Expr::Product(product)) => {
-                Sum::new(Constant::zero(), vec1![product.into(), power.into()])
+                Sum::new(Constant::zero(), operands![product.into(), power.into()])
             }
 
             (Expr::Product(product), Expr::Factorial(factorial))
-            | (Expr::Factorial(factorial), Expr::Product(product)) => {
-                Sum::new(Constant::zero(), vec1![product.into(), factorial.into()])
-            }
+            | (Expr::Factorial(factorial), Expr::Product(product)) => Sum::new(
+                Constant::zero(),
+                operands![product.into(), factorial.into()],
+            ),
 
             (Expr::Power(power), Expr::Factorial(factorial))
             | (Expr::Factorial(factorial), Expr::Power(power)) => {
-                Sum::new(Constant::zero(), vec1![power.into(), factorial.into()])
+                Sum::new(Constant::zero(), operands![power.into(), factorial.into()])
             }
 
             (Expr::Sum(sum), Expr::Symbol(other)) | (Expr::Symbol(other), Expr::Sum(sum)) => {
@@ -150,6 +156,8 @@ impl Expr {
             (Expr::Sum(sum), Expr::Factorial(other)) | (Expr::Factorial(other), Expr::Sum(sum)) => {
                 sum.add(other.as_expr())
             }
+
+            (Expr::Undefined, _) | (_, Expr::Undefined) => Expr::Undefined,
         }
     }
 
@@ -242,6 +250,8 @@ impl Expr {
             (Expr::Sum(sum), Expr::Product(product)) | (Expr::Product(product), Expr::Sum(sum)) => {
                 product.multiply(sum.as_expr())
             }
+
+            (Expr::Undefined, _) | (_, Expr::Undefined) => Expr::Undefined,
         }
     }
 
@@ -255,12 +265,41 @@ impl Expr {
 
     fn negate(self) -> Self {
         match self {
+            Self::Undefined => Self::Undefined,
             Self::Symbol(symbol) => symbol.negate(),
             Self::Constant(constant) => constant.negate().as_expr(),
             Self::Sum(sum) => sum.negate(),
             Self::Product(product) => product.negate().as_expr(),
             Self::Power(power) => power.negate(),
             Self::Factorial(factorial) => factorial.negate(),
+        }
+    }
+
+    fn is_undefined(&self) -> bool {
+        match self {
+            Expr::Undefined => true,
+            _ => false,
+        }
+    }
+
+    fn is_zero_const(&self) -> bool {
+        match self {
+            Expr::Constant(constant) => constant.is_zero(),
+            _ => false,
+        }
+    }
+
+    fn is_one_const(&self) -> bool {
+        match self {
+            Expr::Constant(constant) => constant.is_one(),
+            _ => false,
+        }
+    }
+
+    fn is_pos_const(&self) -> bool {
+        match self {
+            Expr::Constant(constant) => constant.is_pos(),
+            _ => false,
         }
     }
 
@@ -302,8 +341,15 @@ impl Expr {
 
     fn expect_non_integer_power_exponent(self) -> NonIntegerPowerExponent {
         match self {
+            Expr::Undefined => panic!("Undefined expression"),
             Expr::Symbol(symbol) => symbol.into(),
-            Expr::Constant(constant) => constant.into(),
+            Expr::Constant(constant) => {
+                if constant.is_int() {
+                    panic!("Integer constant")
+                } else {
+                    constant.into()
+                }
+            }
             Expr::Sum(sum) => sum.into(),
             Expr::Product(product) => product.into(),
             Expr::Power(power) => power.into(),
@@ -317,6 +363,11 @@ pub(crate) mod unenforced_helpers {
         constant::Constant, factorial::Factorial, power::Power, product::Product, sum::Sum,
         symbol::Symbol, Expr,
     };
+
+    #[allow(dead_code)]
+    pub fn undefined() -> Expr {
+        Expr::Undefined
+    }
 
     #[allow(dead_code)]
     pub fn int(value: i128) -> Expr {
@@ -359,9 +410,53 @@ pub(crate) mod unenforced_helpers {
     }
 }
 
+#[macro_export]
+macro_rules! operands {
+    () => (
+        compile_error!("Vec1 needs at least 1 element")
+    );
+    ($first:expr $(, $item:expr)* , ) => (
+        $crate::vec1!($first $(, $item)*)
+    );
+    ($first:expr $(, $item:expr)* ) => ({
+        #[allow(unused_mut)]
+        let mut tmp = $crate::expr::Operands::new($first);
+        $(tmp.insert($item);)*
+        tmp
+    });
+}
+
+#[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub(crate) struct Operands<T: Ord> {
+    set: BTreeSet<T>,
+}
+impl<T: Ord> Operands<T> {
+    pub fn new(first: T) -> Self {
+        Self {
+            set: BTreeSet::from([first]),
+        }
+    }
+
+    pub fn insert(&mut self, operand: T) {
+        self.set.insert(operand);
+    }
+
+    pub fn len(&self) -> usize {
+        self.set.len()
+    }
+
+    pub fn take_first(self) -> T {
+        self.set.into_iter().next().unwrap()
+    }
+
+    pub fn into_iter(self) -> IntoIter<T> {
+        self.set.into_iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::expression4::unenforced_helpers::*;
+    use crate::expr::unenforced_helpers::*;
 
     use super::*;
 

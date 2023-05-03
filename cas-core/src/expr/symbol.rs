@@ -1,7 +1,7 @@
 use super::{constant::Constant, product::Product, Expr};
 use vec1::vec1;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Symbol {
     name: String,
 }

@@ -3,13 +3,13 @@ use rust_decimal::Decimal;
 
 use super::Expr;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum ConstantKind {
     Integer(BigInt),
     Fraction(BigRational),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Constant {
     kind: ConstantKind,
 }
@@ -68,6 +68,13 @@ impl Constant {
             int
         } else {
             panic!("Constant {:?} is not an integer", self)
+        }
+    }
+
+    pub fn is_pos(&self) -> bool {
+        match &self.kind {
+            ConstantKind::Integer(integer) => integer.is_positive(),
+            ConstantKind::Fraction(fraction) => fraction.is_positive(),
         }
     }
 
@@ -210,7 +217,7 @@ impl Constant {
 mod tests {
     use rust_decimal_macros::dec;
 
-    use crate::expression4::{
+    use crate::expr::{
         constant::Constant,
         unenforced_helpers::{frac, int},
         Expr,

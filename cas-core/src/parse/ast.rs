@@ -42,6 +42,7 @@ impl BinaryOp {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Ast {
+    Undefined,
     Symbol(String),
     Constant(Decimal),
     UnaryOp(AstUnaryOp),
@@ -121,4 +122,8 @@ pub fn con(decimal: &str) -> Ast {
     Ast::Constant(
         Decimal::from_str(decimal).expect(&format!("Could not parse '{decimal}' as decimal")),
     )
+}
+
+pub fn und() -> Ast {
+    Ast::Undefined
 }

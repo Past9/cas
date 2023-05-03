@@ -53,6 +53,11 @@ pub(crate) fn parse(
 
 fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
     recursive(|expr| {
+        let keywords = select! {
+            Token::Undefined => Ast::Undefined,
+        }
+        .boxed();
+
         let symbol = select! {
             Token::Ident(name) => Ast::symbol(name),
         }
@@ -65,7 +70,8 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
         }
         .boxed();
 
-        let atom = symbol
+        let atom = keywords
+            .or(symbol)
             .or(constant)
             .or(expr
                 .clone()
@@ -118,7 +124,7 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::ast::{add, con, div, exp, fac, mul, neg, sub, sym};
+    use crate::parse::ast::{add, con, div, exp, fac, mul, neg, sub, sym, und};
 
     use super::*;
 
@@ -304,5 +310,13 @@ mod tests {
                 mul(con("3"), con("4"))
             )
         );
+    }
+
+    #[test]
+    fn undefined() {
+        assert_eq!(
+            parse_src("undefined + x").ast.unwrap(),
+            add(und(), sym("x"))
+        )
     }
 }

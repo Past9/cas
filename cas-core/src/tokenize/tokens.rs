@@ -10,4 +10,7 @@ pub enum Token {
     FwdSlash,
     Caret,
     Bang,
+    Undefined,
+    Sin,
+    Cos,
 }

@@ -3,7 +3,7 @@ use vec1::vec1;
 
 use super::{constant::Constant, product::Product, Expr};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Factorial {
     operand: Box<Expr>,
 }
