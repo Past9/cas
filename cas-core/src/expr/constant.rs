@@ -219,7 +219,7 @@ mod tests {
 
     use crate::expr::{
         constant::Constant,
-        unenforced_helpers::{frac, int},
+        test_helpers::{frac, int, test_src},
         Expr,
     };
 
@@ -227,63 +227,63 @@ mod tests {
     fn dec_to_frac() {
         assert_eq!(Constant::from_dec(dec!(1.2)).as_expr(), frac(6, 5));
         assert_eq!(Constant::from_dec(dec!(-1.2)).as_expr(), frac(-6, 5));
-        assert_eq!(Expr::from_src("1.2"), frac(6, 5));
+        test_src("1.2", frac(6, 5));
     }
 
     #[test]
     fn dec_to_int() {
         assert_eq!(Constant::from_dec(dec!(2.0)).as_expr(), int(2));
         assert_eq!(Constant::from_dec(dec!(-2.0)).as_expr(), int(-2));
-        assert_eq!(Expr::from_src("2.0"), int(2));
+        test_src("2.0", int(2));
     }
 
     #[test]
     fn div_to_frac() {
-        assert_eq!(Expr::from_src("1/2"), frac(1, 2));
-        assert_eq!(Expr::from_src("6/5"), frac(6, 5));
-        assert_eq!(Expr::from_src("1/3"), frac(1, 3));
+        test_src("1/2", frac(1, 2));
+        test_src("6/5", frac(6, 5));
+        test_src("1/3", frac(1, 3));
     }
 
     #[test]
     fn div_to_int() {
-        assert_eq!(Expr::from_src("2/1"), int(2));
-        assert_eq!(Expr::from_src("4/2"), int(2));
+        test_src("2/1", int(2));
+        test_src("4/2", int(2));
     }
 
     #[test]
     fn negate() {
-        assert_eq!(Expr::from_src("-1.2"), frac(-6, 5));
-        assert_eq!(Expr::from_src("-2.0"), int(-2));
-        assert_eq!(Expr::from_src("-1/2"), frac(-1, 2));
-        assert_eq!(Expr::from_src("1/-2"), frac(-1, 2));
-        assert_eq!(Expr::from_src("-(1/2)"), frac(-1, 2));
+        test_src("-1.2", frac(-6, 5));
+        test_src("-2.0", int(-2));
+        test_src("-1/2", frac(-1, 2));
+        test_src("1/-2", frac(-1, 2));
+        test_src("-(1/2)", frac(-1, 2));
     }
 
     #[test]
     fn add() {
-        assert_eq!(Expr::from_src("1 + 2"), int(3));
-        assert_eq!(Expr::from_src("1/2 + 1/2"), int(1));
-        assert_eq!(Expr::from_src("1/2 + 2"), frac(5, 2));
+        test_src("1 + 2", int(3));
+        test_src("1/2 + 1/2", int(1));
+        test_src("1/2 + 2", frac(5, 2));
     }
 
     #[test]
     fn subtract() {
-        assert_eq!(Expr::from_src("2 - 1"), int(1));
-        assert_eq!(Expr::from_src("1 - 2"), int(-1));
-        assert_eq!(Expr::from_src("1/2 - 1/2"), int(0));
-        assert_eq!(Expr::from_src("1/2 - 2"), frac(-3, 2));
-        assert_eq!(Expr::from_src("2 - 1/2"), frac(3, 2));
+        test_src("2 - 1", int(1));
+        test_src("1 - 2", int(-1));
+        test_src("1/2 - 1/2", int(0));
+        test_src("1/2 - 2", frac(-3, 2));
+        test_src("2 - 1/2", frac(3, 2));
     }
 
     #[test]
     fn multiply() {
-        assert_eq!(Expr::from_src("2 * 1"), int(2));
-        assert_eq!(Expr::from_src("2 * 2"), int(4));
-        assert_eq!(Expr::from_src("2 * 0"), int(0));
-        assert_eq!(Expr::from_src("1/2 * 2"), int(1));
-        assert_eq!(Expr::from_src("-1/2 * 2"), int(-1));
-        assert_eq!(Expr::from_src("1/-2 * 2"), int(-1));
-        assert_eq!(Expr::from_src("1/2 * -2"), int(-1));
+        test_src("2 * 1", int(2));
+        test_src("2 * 2", int(4));
+        test_src("2 * 0", int(0));
+        test_src("1/2 * 2", int(1));
+        test_src("-1/2 * 2", int(-1));
+        test_src("1/-2 * 2", int(-1));
+        test_src("1/2 * -2", int(-1));
     }
 
     #[test]
@@ -302,10 +302,10 @@ mod tests {
 
     #[test]
     fn power_int() {
-        assert_eq!(Expr::from_src("2 ^ -2"), frac(1, 4));
-        assert_eq!(Expr::from_src("2 ^ -1"), frac(1, 2));
-        assert_eq!(Expr::from_src("2 ^ 0"), int(1));
-        assert_eq!(Expr::from_src("2 ^ 1"), int(2));
-        assert_eq!(Expr::from_src("2 ^ 2"), int(4));
+        test_src("2 ^ -2", frac(1, 4));
+        test_src("2 ^ -1", frac(1, 2));
+        test_src("2 ^ 0", int(1));
+        test_src("2 ^ 1", int(2));
+        test_src("2 ^ 2", int(4));
     }
 }

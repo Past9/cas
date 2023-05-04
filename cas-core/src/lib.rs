@@ -1,6 +1,7 @@
 mod error;
-pub mod expr;
+//pub mod expr;
 mod parse;
+mod simplify;
 mod tokenize;
 
 pub type Span = std::ops::Range<usize>;

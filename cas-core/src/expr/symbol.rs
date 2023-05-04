@@ -1,5 +1,6 @@
+use crate::operands;
+
 use super::{constant::Constant, product::Product, Expr};
-use vec1::vec1;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Symbol {
@@ -19,6 +20,6 @@ impl Symbol {
     }
 
     pub fn negate(self) -> Expr {
-        Product::new(Constant::neg_one(), vec1![self.into()])
+        Product::new(Constant::neg_one(), operands![self.into()])
     }
 }

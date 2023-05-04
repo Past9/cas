@@ -11,15 +11,16 @@ use std::collections::{btree_set::IntoIter, BTreeSet};
 use self::{
     constant::Constant,
     factorial::Factorial,
-    power::{IntegerPowerBase, NonIntegerPowerExponent, Power},
+    power::{IntegerPower, IntegerPowerBase, NonIntegerPowerExponent, Power},
     product::{Factor, Product},
     sum::{Addend, Sum},
     symbol::Symbol,
 };
 use crate::parse::{ast::Ast, parse_src};
+use num::{BigInt, Integer, Zero};
 use vec1::vec1;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Expr {
     Undefined,
     Symbol(Symbol),
@@ -166,69 +167,73 @@ impl Expr {
             (Expr::Constant(l), Expr::Constant(r)) => l.multiply(r).as_expr(),
 
             (Expr::Symbol(l), Expr::Symbol(r)) => {
-                Product::new(Constant::one(), vec1![l.into(), r.into()])
+                if l == r {
+                    IntegerPower::new(l.into(), 2.into()).as_expr()
+                } else {
+                    Product::new(Constant::one(), operands![l.into(), r.into()])
+                }
             }
 
             (Expr::Product(l), Expr::Product(r)) => l.multiply(r.as_expr()),
 
             (Expr::Power(l), Expr::Power(r)) => {
-                Product::new(Constant::one(), vec1![l.into(), r.into()])
+                Product::new(Constant::one(), operands![l.into(), r.into()])
             }
 
             (Expr::Factorial(l), Expr::Factorial(r)) => {
-                Product::new(Constant::one(), vec1![l.into(), r.into()])
+                Product::new(Constant::one(), operands![l.into(), r.into()])
             }
 
             (Expr::Sum(l), Expr::Sum(r)) => {
-                Product::new(Constant::one(), vec1![l.into(), r.into()])
+                Product::new(Constant::one(), operands![l.into(), r.into()])
             }
 
             (Expr::Symbol(symbol), Expr::Constant(constant))
             | (Expr::Constant(constant), Expr::Symbol(symbol)) => {
-                Product::new(constant, vec1![symbol.into()])
+                Product::new(constant, operands![symbol.into()])
             }
 
             (Expr::Symbol(symbol), Expr::Power(power))
             | (Expr::Power(power), Expr::Symbol(symbol)) => {
-                Product::new(Constant::one(), vec1![symbol.into(), power.into()])
+                Product::new(Constant::one(), operands![symbol.into(), power.into()])
             }
 
             (Expr::Symbol(symbol), Expr::Factorial(factorial))
             | (Expr::Factorial(factorial), Expr::Symbol(symbol)) => {
-                Product::new(Constant::one(), vec1![symbol.into(), factorial.into()])
+                Product::new(Constant::one(), operands![symbol.into(), factorial.into()])
             }
 
             (Expr::Constant(constant), Expr::Power(power))
             | (Expr::Power(power), Expr::Constant(constant)) => {
-                Product::new(constant, vec1![power.into()])
+                Product::new(constant, operands![power.into()])
             }
 
             (Expr::Constant(constant), Expr::Factorial(factorial))
             | (Expr::Factorial(factorial), Expr::Constant(constant)) => {
-                Product::new(constant, vec1![factorial.into()])
+                Product::new(constant, operands![factorial.into()])
             }
 
             (Expr::Power(power), Expr::Factorial(factorial))
             | (Expr::Factorial(factorial), Expr::Power(power)) => {
-                Product::new(Constant::one(), vec1![power.into(), factorial.into()])
+                Product::new(Constant::one(), operands![power.into(), factorial.into()])
             }
 
             (Expr::Sum(sum), Expr::Symbol(symbol)) | (Expr::Symbol(symbol), Expr::Sum(sum)) => {
-                Product::new(Constant::one(), vec1![symbol.into(), sum.into()])
+                Product::new(Constant::one(), operands![symbol.into(), sum.into()])
             }
 
             (Expr::Sum(sum), Expr::Constant(constant))
             | (Expr::Constant(constant), Expr::Sum(sum)) => {
-                Product::new(constant, vec1![sum.into()])
+                Product::new(constant, operands![sum.into()])
             }
 
             (Expr::Sum(sum), Expr::Power(power)) | (Expr::Power(power), Expr::Sum(sum)) => {
-                Product::new(Constant::one(), vec1![power.into(), sum.into()])
+                Product::new(Constant::one(), operands![power.into(), sum.into()])
             }
 
             (Expr::Sum(sum), Expr::Factorial(factorial))
             | (Expr::Factorial(factorial), Expr::Sum(sum)) => {
-                Product::new(Constant::one(), vec1![factorial.into(), sum.into()])
+                Product::new(Constant::one(), operands![factorial.into(), sum.into()])
             }
 
             (Expr::Symbol(symbol), Expr::Product(product))
@@ -358,53 +363,49 @@ impl Expr {
     }
 }
 
-pub(crate) mod unenforced_helpers {
+#[cfg(test)]
+pub(crate) mod test_helpers {
     use super::{
         constant::Constant, factorial::Factorial, power::Power, product::Product, sum::Sum,
         symbol::Symbol, Expr,
     };
 
-    #[allow(dead_code)]
+    pub fn test_src(src: &str, expected: Expr) {
+        assert_eq!(Expr::from_src(src), expected);
+    }
+
     pub fn undefined() -> Expr {
         Expr::Undefined
     }
 
-    #[allow(dead_code)]
     pub fn int(value: i128) -> Expr {
         Constant::unenforced_int(value)
     }
 
-    #[allow(dead_code)]
     pub fn frac(num: i128, den: i128) -> Expr {
         Constant::unenforced_frac(num, den)
     }
 
-    #[allow(dead_code)]
     pub fn sym(name: &str) -> Expr {
         Symbol::unenforced(name.into())
     }
 
-    #[allow(dead_code)]
     pub fn factorial(expr: Expr) -> Expr {
         Factorial::unenforced(expr)
     }
 
-    #[allow(dead_code)]
     pub fn product<const N: usize>(factors: [Expr; N]) -> Expr {
         Product::unenforced(Vec::from(factors))
     }
 
-    #[allow(dead_code)]
     pub fn sum<const N: usize>(addends: [Expr; N]) -> Expr {
         Sum::unenforced(Vec::from(addends))
     }
 
-    #[allow(dead_code)]
     pub fn pow(base: Expr, exponent: Expr) -> Expr {
         Power::unenforced(base, exponent)
     }
 
-    #[allow(dead_code)]
     pub fn powi(base: Expr, exponent: i128) -> Expr {
         Power::unenforced_int(base, exponent)
     }
@@ -426,7 +427,11 @@ macro_rules! operands {
     });
 }
 
-#[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub(crate) trait OperandHelpers<T: Ord> {
+    fn int_power_of(&self, operand: &T) -> BigInt;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub(crate) struct Operands<T: Ord> {
     set: BTreeSet<T>,
 }
@@ -452,41 +457,103 @@ impl<T: Ord> Operands<T> {
     pub fn into_iter(self) -> IntoIter<T> {
         self.set.into_iter()
     }
+
+    pub fn contains(&self, operand: &T) -> bool {
+        self.set.contains(operand)
+    }
+
+    pub fn replace(&mut self, old: &T, new: T) {
+        self.set.remove(old);
+        self.set.insert(new);
+    }
+}
+impl Operands<Factor> {
+    fn multiply_symbol(&mut self, symbol: &Symbol) {
+        let symbol_factor = Factor::Symbol(symbol.clone());
+        if self.set.contains(&symbol_factor) {
+            self.replace(
+                &symbol_factor,
+                Power::from(IntegerPower::new(symbol.to_owned().into(), 2.into())).into(),
+            );
+        } else {
+            for member in self.set.iter() {
+                println!("MEMBER {:#?}", member);
+                match member {
+                    Factor::Power(power) => {
+                        let exponent = power.int_power_of_factor(&symbol_factor);
+                        if !exponent.is_zero() {
+                            let exponent = exponent + BigInt::from(1);
+                            self.replace(
+                                &Factor::Power(power.to_owned()),
+                                Power::from(IntegerPower::new(symbol.clone().into(), exponent))
+                                    .into(),
+                            );
+                            return;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            self.insert(symbol.to_owned().into());
+        }
+    }
+}
+impl OperandHelpers<Factor> for Operands<Factor> {
+    fn int_power_of(&self, operand: &Factor) -> BigInt {
+        if self.contains(operand) {
+            return 1.into();
+        } else {
+            for member in self.set.iter() {
+                match member {
+                    Factor::Power(power) => {
+                        let exponent = power.int_power_of_factor(&operand);
+                        if !exponent.is_zero() {
+                            return exponent;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        return 0.into();
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::expr::unenforced_helpers::*;
+    use crate::expr::test_helpers::*;
 
     use super::*;
 
     #[test]
     fn reads_integer() {
-        assert_eq!(Expr::from_src("123"), int(123));
-        assert_eq!(Expr::from_src("0"), int(0));
-        assert_eq!(Expr::from_src("001"), int(1));
-        assert_eq!(Expr::from_src("100"), int(100));
+        test_src("123", int(123));
+        test_src("0", int(0));
+        test_src("001", int(1));
+        test_src("100", int(100));
     }
 
     #[test]
     fn reads_negative_integer() {
-        assert_eq!(Expr::from_src("-123"), int(-123));
-        assert_eq!(Expr::from_src("-0"), int(0));
-        assert_eq!(Expr::from_src("-001"), int(-1));
-        assert_eq!(Expr::from_src("-100"), int(-100));
+        test_src("-123", int(-123));
+        test_src("-0", int(0));
+        test_src("-001", int(-1));
+        test_src("-100", int(-100));
     }
 
     #[test]
     fn reads_decimal_fraction() {
-        assert_eq!(Expr::from_src("1.2"), frac(6, 5));
-        assert_eq!(Expr::from_src("0.12"), frac(3, 25));
-        assert_eq!(Expr::from_src("12.0"), int(12));
+        test_src("1.2", frac(6, 5));
+        test_src("0.12", frac(3, 25));
+        test_src("12.0", int(12));
     }
 
     #[test]
     fn reads_negative_decimal_fraction() {
-        assert_eq!(Expr::from_src("-1.2"), frac(-6, 5));
-        assert_eq!(Expr::from_src("-0.12"), frac(-3, 25));
-        assert_eq!(Expr::from_src("-12.0"), int(-12));
+        test_src("-1.2", frac(-6, 5));
+        test_src("-0.12", frac(-3, 25));
+        test_src("-12.0", int(-12));
     }
 }

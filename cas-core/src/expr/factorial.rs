@@ -1,9 +1,11 @@
 use num::BigUint;
 use vec1::vec1;
 
+use crate::operands;
+
 use super::{constant::Constant, product::Product, Expr};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Factorial {
     operand: Box<Expr>,
 }
@@ -41,7 +43,7 @@ impl Factorial {
     }
 
     pub fn negate(self) -> Expr {
-        Product::new(Constant::neg_one(), vec1![self.into()])
+        Product::new(Constant::neg_one(), operands![self.into()])
     }
 }
 

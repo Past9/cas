@@ -7,7 +7,7 @@ use super::{
     Operands,
 };
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Sum {
     constant: Constant,
     addends: Operands<Addend>,
@@ -38,7 +38,7 @@ impl Sum {
     }
 
     pub fn negate(self) -> Expr {
-        Product::new(Constant::neg_one(), vec1![self.into()])
+        Product::new(Constant::neg_one(), operands![self.into()])
     }
 
     pub fn as_expr(self) -> Expr {
@@ -98,7 +98,7 @@ impl Sum {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Addend {
     Symbol(Symbol),
     Product(Product),
@@ -139,7 +139,7 @@ impl From<Factorial> for Addend {
 #[cfg(test)]
 mod tests {
     use crate::expr::{
-        unenforced_helpers::{int, sum, sym},
+        test_helpers::{int, sum, sym},
         Expr,
     };
 

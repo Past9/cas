@@ -11,12 +11,11 @@ use rust_decimal::Decimal;
 
 use crate::{
     error::SyntaxError,
-    parse::ast::UnaryOp,
     tokenize::{tokenize_src, tokens::Token},
     Spanned,
 };
 
-use self::ast::{Ast, BinaryOp};
+use self::ast::{ast_helpers::*, Ast, };
 
 #[derive(Debug, Clone)]
 pub struct ParserResult {
@@ -54,19 +53,20 @@ pub(crate) fn parse(
 fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
     recursive(|expr| {
         let keywords = select! {
-            Token::Undefined => Ast::Undefined,
+            Token::Undefined => Ast::Und,
         }
         .boxed();
 
         let symbol = select! {
-            Token::Ident(name) => Ast::symbol(name),
+            Token::Ident(name) => sym(&name),
         }
         .boxed();
 
         let constant = select! {
-            Token::Const(text) => Ast::constant(
-                Decimal::from_str(&text).expect(&format!("Could not parse {} as number", text))
-            )
+            Token::Const(text) => {
+                let dec = Decimal::from_str(&text).expect(&format!("Could not parse {} as number", text));
+                Ast::from_dec(dec)
+            }
         }
         .boxed();
 
@@ -80,19 +80,19 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
 
         let factorial = atom
             .then(just(Token::Bang).repeated())
-            .foldl(|operand, op| Ast::unary_op(UnaryOp::from_token(op), operand))
+            .foldl(|operand, op| fac(operand))
             .boxed();
 
         let neg = just(Token::Minus)
             .repeated()
             .then(factorial)
-            .foldr(|op, operand| Ast::unary_op(UnaryOp::from_token(op), operand))
+            .foldr(|op, operand| neg(operand))
             .boxed();
 
         let exp = neg
             .clone()
             .then(just(Token::Caret).then(neg).repeated())
-            .foldl(|left, (op, right)| Ast::binary_op(BinaryOp::from_token(op), left, right))
+            .foldl(|left, (op, right)| exp(left, right))
             .boxed();
 
         let mul_div = exp
@@ -103,7 +103,15 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
                     .then(exp)
                     .repeated(),
             )
-            .foldl(|left, (op, right)| Ast::binary_op(BinaryOp::from_token(op), left, right))
+            .foldl(|left, (op, right)|  { 
+                if op == Token::Asterisk {
+                    mul(left, right) 
+                } else if op == Token::FwdSlash {
+                    div(left, right)
+                } else {
+                    panic!("Invalid operator at mul/div precedence level: {:?}", op)
+                }
+            })
             .boxed();
 
         let add_sub = mul_div
@@ -114,7 +122,15 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
                     .then(mul_div)
                     .repeated(),
             )
-            .foldl(|left, (op, right)| Ast::binary_op(BinaryOp::from_token(op), left, right))
+            .foldl(|left, (op, right)| {
+                if op == Token::Plus {
+                    add(left, right)
+                } else if op == Token::Minus {
+                    sub(left, right)
+                } else {
+                    panic!("Invalid operator at add/sub precedence level: {:?}", op)
+                }
+            })
             .boxed();
 
         add_sub
@@ -124,7 +140,7 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::ast::{add, con, div, exp, fac, mul, neg, sub, sym, und};
+    use crate::parse::ast::ast_helpers::{add, div, exp, fac, frac, int, mul, neg, sub, sym, und};
 
     use super::*;
 
@@ -145,62 +161,62 @@ mod tests {
 
     #[test]
     fn factorial() {
-        assert_eq!(parse_src("3!").ast.unwrap(), fac(con("3")));
+        assert_eq!(parse_src("3!").ast.unwrap(), fac(int(3)));
     }
 
     #[test]
     fn double_factorial() {
-        assert_eq!(parse_src("3!!").ast.unwrap(), fac(fac(con("3"))));
+        assert_eq!(parse_src("3!!").ast.unwrap(), fac(fac(int(3))));
     }
 
     #[test]
     fn neg_factorial() {
-        assert_eq!(parse_src("-3!").ast.unwrap(), neg(fac(con("3"))));
+        assert_eq!(parse_src("-3!").ast.unwrap(), neg(fac(int(3))));
     }
 
     #[test]
     fn pos_integer() {
-        assert_eq!(parse_src("123").ast.unwrap(), con("123"));
+        assert_eq!(parse_src("123").ast.unwrap(), int(123));
     }
 
     #[test]
     fn neg_integer() {
-        assert_eq!(parse_src("-123").ast.unwrap(), neg(con("123")));
+        assert_eq!(parse_src("-123").ast.unwrap(), neg(int(123)));
     }
 
     #[test]
     fn pos_decimal() {
-        assert_eq!(parse_src("123.456").ast.unwrap(), con("123.456"));
+        assert_eq!(parse_src("123.456").ast.unwrap(), frac(123456, 1000));
     }
 
     #[test]
     fn neg_decimal() {
-        assert_eq!(parse_src("-123.456").ast.unwrap(), neg(con("123.456")));
+        assert_eq!(parse_src("-123.456").ast.unwrap(), neg(frac(123456, 1000)));
     }
 
     #[test]
     fn single_add() {
-        assert_eq!(parse_src("1 + 2").ast.unwrap(), add(con("1"), con("2")));
+        assert_eq!(parse_src("1 + 2").ast.unwrap(), add(int(1), int(2)));
     }
 
     #[test]
     fn multiple_add() {
         assert_eq!(
             parse_src("1 + 2 + 3").ast.unwrap(),
-            add(add(con("1"), con("2")), con("3"))
+            add(add(int(1), int(2)), int(3))
         );
     }
 
     #[test]
     fn single_sub() {
-        assert_eq!(parse_src("1 - 2").ast.unwrap(), sub(con("1"), con("2")));
+        assert_eq!(parse_src("1 - 2").ast.unwrap(), sub(int(1), int(2)));
     }
 
     #[test]
     fn multiple_sub() {
         assert_eq!(
             parse_src("1 - 2 - 3").ast.unwrap(),
-            sub(sub(con("1"), con("2")), con("3"))
+            sub(sub(int(1), int(2)), int(3))
         );
     }
 
@@ -208,7 +224,7 @@ mod tests {
     fn add_sub() {
         assert_eq!(
             parse_src("1 + 2 - 3").ast.unwrap(),
-            sub(add(con("1"), con("2")), con("3"))
+            sub(add(int(1), int(2)), int(3))
         );
     }
 
@@ -216,33 +232,33 @@ mod tests {
     fn sub_add() {
         assert_eq!(
             parse_src("1 - 2 + 3").ast.unwrap(),
-            add(sub(con("1"), con("2")), con("3"))
+            add(sub(int(1), int(2)), int(3))
         );
     }
 
     #[test]
     fn single_mul() {
-        assert_eq!(parse_src("1 * 2").ast.unwrap(), mul(con("1"), con("2")));
+        assert_eq!(parse_src("1 * 2").ast.unwrap(), mul(int(1), int(2)));
     }
 
     #[test]
     fn multiple_mul() {
         assert_eq!(
             parse_src("1 * 2 * 3").ast.unwrap(),
-            mul(mul(con("1"), con("2")), con("3"))
+            mul(mul(int(1), int(2)), int(3))
         );
     }
 
     #[test]
     fn single_div() {
-        assert_eq!(parse_src("1 / 2").ast.unwrap(), div(con("1"), con("2")));
+        assert_eq!(parse_src("1 / 2").ast.unwrap(), div(int(1), int(2)));
     }
 
     #[test]
     fn multiple_div() {
         assert_eq!(
             parse_src("1 / 2 / 3").ast.unwrap(),
-            div(div(con("1"), con("2")), con("3"))
+            div(div(int(1), int(2)), int(3))
         );
     }
 
@@ -250,7 +266,7 @@ mod tests {
     fn mul_div() {
         assert_eq!(
             parse_src("1 * 2 / 3").ast.unwrap(),
-            div(mul(con("1"), con("2")), con("3"))
+            div(mul(int(1), int(2)), int(3))
         );
     }
 
@@ -258,20 +274,20 @@ mod tests {
     fn div_mul() {
         assert_eq!(
             parse_src("1 / 2 * 3").ast.unwrap(),
-            mul(div(con("1"), con("2")), con("3"))
+            mul(div(int(1), int(2)), int(3))
         );
     }
 
     #[test]
     fn single_exp() {
-        assert_eq!(parse_src("1 ^ 2").ast.unwrap(), exp(con("1"), con("2")));
+        assert_eq!(parse_src("1 ^ 2").ast.unwrap(), exp(int(1), int(2)));
     }
 
     #[test]
     fn multiple_exp() {
         assert_eq!(
             parse_src("1 ^ 2 ^ 3").ast.unwrap(),
-            exp(exp(con("1"), con("2")), con("3"))
+            exp(exp(int(1), int(2)), int(3))
         );
     }
 
@@ -280,21 +296,21 @@ mod tests {
         // Without parens (multiplication before addition)
         assert_eq!(
             parse_src("1 + 2 * 3").ast.unwrap(),
-            add(con("1"), mul(con("2"), con("3")))
+            add(int(1), mul(int(2), int(3)))
         );
         assert_eq!(
             parse_src("1 * 2 + 3").ast.unwrap(),
-            add(mul(con("1"), con("2")), con("3"))
+            add(mul(int(1), int(2)), int(3))
         );
 
         // With parens (order is changed, addition before multiplication)
         assert_eq!(
             parse_src("(1 + 2) * 3").ast.unwrap(),
-            mul(add(con("1"), con("2")), con("3"))
+            mul(add(int(1), int(2)), int(3))
         );
         assert_eq!(
             parse_src("1 * (2 + 3)").ast.unwrap(),
-            mul(con("1"), add(con("2"), con("3")))
+            mul(int(1), add(int(2), int(3)))
         );
     }
 
@@ -304,10 +320,10 @@ mod tests {
             parse_src("2 * 6 / (8 - 2) - 2 ^ 3 + 3 * 4").ast.unwrap(),
             add(
                 sub(
-                    div(mul(con("2"), con("6")), sub(con("8"), con("2"))),
-                    exp(con("2"), con("3"))
+                    div(mul(int(2), int(6)), sub(int(8), int(2))),
+                    exp(int(2), int(3))
                 ),
-                mul(con("3"), con("4"))
+                mul(int(3), int(4))
             )
         );
     }

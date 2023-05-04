@@ -1,10 +1,17 @@
+use crate::operands;
+
 use super::{
-    constant::Constant, factorial::Factorial, product::Product, sum::Sum, symbol::Symbol, Expr,
+    constant::Constant,
+    factorial::Factorial,
+    product::{Factor, Product},
+    sum::Sum,
+    symbol::Symbol,
+    Expr,
 };
 use num::{BigInt, BigRational, FromPrimitive};
 use vec1::vec1;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum PowerKind {
     IntegerPower(IntegerPower),
     NonIntegerPower(NonIntegerPower),
@@ -28,12 +35,16 @@ impl From<NonIntegerPower> for PowerKind {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct IntegerPower {
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct IntegerPower {
     base: IntegerPowerBase,
     exponent: BigInt,
 }
 impl IntegerPower {
+    pub fn new(base: IntegerPowerBase, exponent: BigInt) -> Self {
+        Self { base, exponent }
+    }
+
     pub fn as_expr(self) -> Expr {
         Power::from(PowerKind::from(self)).as_expr()
     }
@@ -44,7 +55,7 @@ impl IntegerPower {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum IntegerPowerBase {
     Symbol(Symbol),
     Sum(Box<Sum>),
@@ -56,6 +67,26 @@ impl IntegerPowerBase {
             IntegerPowerBase::Symbol(symbol) => Expr::Symbol(symbol),
             IntegerPowerBase::Sum(sum) => Expr::Sum(*sum),
             IntegerPowerBase::Factorial(factorial) => Expr::Factorial(*factorial),
+        }
+    }
+}
+impl PartialEq<Factor> for IntegerPowerBase {
+    fn eq(&self, other: &Factor) -> bool {
+        match (self, other) {
+            (IntegerPowerBase::Symbol(l), Factor::Symbol(r)) => l == r,
+            (IntegerPowerBase::Sum(l), Factor::Sum(r)) => **l == *r,
+            (IntegerPowerBase::Factorial(l), Factor::Factorial(r)) => **l == *r,
+            _ => false,
+        }
+    }
+}
+impl PartialEq<Expr> for IntegerPowerBase {
+    fn eq(&self, other: &Expr) -> bool {
+        match (self, other) {
+            (IntegerPowerBase::Symbol(l), Expr::Symbol(r)) => l == r,
+            (IntegerPowerBase::Sum(l), Expr::Sum(r)) => **l == *r,
+            (IntegerPowerBase::Factorial(l), Expr::Factorial(r)) => **l == *r,
+            _ => false,
         }
     }
 }
@@ -75,7 +106,7 @@ impl From<Factorial> for IntegerPowerBase {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct NonIntegerPower {
     base: Box<Expr>,
     exponent: Box<NonIntegerPowerExponent>,
@@ -90,7 +121,7 @@ impl NonIntegerPower {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum NonIntegerPowerExponent {
     Symbol(Symbol),
     Fraction(BigRational),
@@ -142,7 +173,7 @@ impl From<Factorial> for NonIntegerPowerExponent {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Power {
     kind: PowerKind,
 }
@@ -163,6 +194,32 @@ impl Power {
                 exponent: Box::new(exponent.expect_non_integer_power_exponent()),
             }),
         })
+    }
+
+    pub fn int_power_of_expr(&self, expr: &Expr) -> BigInt {
+        match &self.kind {
+            PowerKind::IntegerPower(int_power) => {
+                if int_power.base == *expr {
+                    int_power.exponent.clone()
+                } else {
+                    0.into()
+                }
+            }
+            PowerKind::NonIntegerPower(_) => 0.into(),
+        }
+    }
+
+    pub fn int_power_of_factor(&self, expr: &Factor) -> BigInt {
+        match &self.kind {
+            PowerKind::IntegerPower(int_power) => {
+                if int_power.base == *expr {
+                    int_power.exponent.clone()
+                } else {
+                    0.into()
+                }
+            }
+            PowerKind::NonIntegerPower(_) => 0.into(),
+        }
     }
 
     pub fn new(base: Expr, exponent: Expr) -> Expr {
@@ -239,7 +296,7 @@ impl Power {
     }
 
     pub fn negate(self) -> Expr {
-        Product::new(Constant::neg_one(), vec1![self.into()])
+        Product::new(Constant::neg_one(), operands![self.into()])
     }
 
     pub fn as_expr(self) -> Expr {
@@ -268,7 +325,7 @@ impl From<IntegerPower> for Power {
 
 #[cfg(test)]
 mod tests {
-    use crate::expr::{unenforced_helpers::*, Expr};
+    use crate::expr::{test_helpers::*, Expr};
 
     #[test]
     fn basic_power_transformation_3_15() {
@@ -288,81 +345,78 @@ mod tests {
 
     #[test]
     fn basic_identity_transformation_3_23() {
-        assert_eq!(Expr::from_src("0 ^ 2"), int(0));
-        assert_eq!(Expr::from_src("0 ^ (1/2)"), int(0));
-        assert_eq!(Expr::from_src("0 ^ x"), undefined());
-        assert_eq!(Expr::from_src("0 ^ -x"), undefined());
-        assert_eq!(Expr::from_src("0 ^ -2"), undefined());
-        assert_eq!(Expr::from_src("0 ^ -(1/2)"), undefined());
+        test_src("0 ^ 2", int(0));
+        test_src("0 ^ (1/2)", int(0));
+        test_src("0 ^ x", undefined());
+        test_src("0 ^ -x", undefined());
+        test_src("0 ^ -2", undefined());
+        test_src("0 ^ -(1/2)", undefined());
     }
 
     #[test]
     fn basic_identity_transformation_3_24() {
-        assert_eq!(Expr::from_src("1 ^ 2"), int(1));
-        assert_eq!(Expr::from_src("1 ^ (x * y)"), int(1));
-        assert_eq!(Expr::from_src("1 ^ -2"), int(1));
+        test_src("1 ^ 2", int(1));
+        test_src("1 ^ (x * y)", int(1));
+        test_src("1 ^ -2", int(1));
     }
 
     #[test]
     fn basic_identity_transformation_3_25() {
-        assert_eq!(Expr::from_src("1 ^ 0"), int(1));
-        assert_eq!(Expr::from_src("2 ^ 0"), int(1));
-        assert_eq!(Expr::from_src("x ^ 0"), int(1));
-        assert_eq!(Expr::from_src("0 ^ 0"), undefined());
+        test_src("1 ^ 0", int(1));
+        test_src("2 ^ 0", int(1));
+        test_src("x ^ 0", int(1));
+        test_src("0 ^ 0", undefined());
     }
 
     #[test]
     fn basic_identity_transformation_3_26() {
-        assert_eq!(Expr::from_src("0 ^ 1"), int(0));
-        assert_eq!(Expr::from_src("1 ^ 1"), int(1));
-        assert_eq!(Expr::from_src("-1 ^ 1"), int(-1));
-        assert_eq!(Expr::from_src("-2 ^ 1"), int(-2));
-        assert_eq!(Expr::from_src("x ^ 1"), sym("x"));
-        assert_eq!(
-            Expr::from_src("(x * y) ^ 1"),
-            product([int(1), sym("x"), sym("y")])
-        );
+        test_src("0 ^ 1", int(0));
+        test_src("1 ^ 1", int(1));
+        test_src("-1 ^ 1", int(-1));
+        test_src("-2 ^ 1", int(-2));
+        test_src("x ^ 1", sym("x"));
+        test_src("(x * y) ^ 1", product([int(1), sym("x"), sym("y")]));
     }
 
     #[test]
     fn basic_numerical_transformation_3() {
-        assert_eq!(Expr::from_src("2 ^ 2"), int(4));
-        assert_eq!(Expr::from_src("(1/2) ^ 2"), frac(1, 4));
-        assert_eq!(Expr::from_src("-2 ^ 2"), int(4));
-        assert_eq!(Expr::from_src("(-1/2) ^ 2"), frac(1, 4));
-        assert_eq!(Expr::from_src("2 ^ -2"), frac(1, 4));
-        assert_eq!(Expr::from_src("(1/2) ^ -2"), int(4));
-        assert_eq!(Expr::from_src("-2 ^ -2"), frac(1, 4));
-        assert_eq!(Expr::from_src("(-1/2) ^ -2"), int(4));
+        test_src("2 ^ 2", int(4));
+        test_src("(1/2) ^ 2", frac(1, 4));
+        test_src("-2 ^ 2", int(4));
+        test_src("(-1/2) ^ 2", frac(1, 4));
+        test_src("2 ^ -2", frac(1, 4));
+        test_src("(1/2) ^ -2", int(4));
+        test_src("-2 ^ -2", frac(1, 4));
+        test_src("(-1/2) ^ -2", int(4));
 
-        assert_eq!(Expr::from_src("2 ^ 3"), int(8));
-        assert_eq!(Expr::from_src("(1/2) ^ 3"), frac(1, 8));
-        assert_eq!(Expr::from_src("-2 ^ 3"), int(-8));
-        assert_eq!(Expr::from_src("(-1/2) ^ 3"), frac(-1, 8));
-        assert_eq!(Expr::from_src("2 ^ -3"), frac(1, 8));
-        assert_eq!(Expr::from_src("(1/2) ^ -3"), int(8));
-        assert_eq!(Expr::from_src("-2 ^ -3"), frac(-1, 8));
-        assert_eq!(Expr::from_src("(-1/2) ^ -3"), int(-8));
+        test_src("2 ^ 3", int(8));
+        test_src("(1/2) ^ 3", frac(1, 8));
+        test_src("-2 ^ 3", int(-8));
+        test_src("(-1/2) ^ 3", frac(-1, 8));
+        test_src("2 ^ -3", frac(1, 8));
+        test_src("(1/2) ^ -3", int(8));
+        test_src("-2 ^ -3", frac(-1, 8));
+        test_src("(-1/2) ^ -3", int(-8));
     }
 
     #[test]
     fn undefined_transformation() {
-        assert_eq!(Expr::from_src("undefined ^ 2"), undefined());
-        assert_eq!(Expr::from_src("undefined ^ -2"), undefined());
-        assert_eq!(Expr::from_src("undefined ^ 1/2"), undefined());
-        assert_eq!(Expr::from_src("undefined ^ -1/2"), undefined());
-        assert_eq!(Expr::from_src("undefined ^ 0"), undefined());
-        assert_eq!(Expr::from_src("undefined ^ x"), undefined());
-        assert_eq!(Expr::from_src("undefined ^ (x * y)"), undefined());
-        assert_eq!(Expr::from_src("undefined ^ (x + y)"), undefined());
+        test_src("undefined ^ 2", undefined());
+        test_src("undefined ^ -2", undefined());
+        test_src("undefined ^ 1/2", undefined());
+        test_src("undefined ^ -1/2", undefined());
+        test_src("undefined ^ 0", undefined());
+        test_src("undefined ^ x", undefined());
+        test_src("undefined ^ (x * y)", undefined());
+        test_src("undefined ^ (x + y)", undefined());
 
-        assert_eq!(Expr::from_src("2 ^ undefined"), undefined());
-        assert_eq!(Expr::from_src("-2 ^ undefined"), undefined());
-        assert_eq!(Expr::from_src("1/2 ^ undefined"), undefined());
-        assert_eq!(Expr::from_src("-1/2 ^ undefined"), undefined());
-        assert_eq!(Expr::from_src("0 ^ undefined"), undefined());
-        assert_eq!(Expr::from_src("x ^ undefined"), undefined());
-        assert_eq!(Expr::from_src("(x * y) ^ undefined"), undefined());
-        assert_eq!(Expr::from_src("(x + y) ^ undefined"), undefined());
+        test_src("2 ^ undefined", undefined());
+        test_src("-2 ^ undefined", undefined());
+        test_src("1/2 ^ undefined", undefined());
+        test_src("-1/2 ^ undefined", undefined());
+        test_src("0 ^ undefined", undefined());
+        test_src("x ^ undefined", undefined());
+        test_src("(x * y) ^ undefined", undefined());
+        test_src("(x + y) ^ undefined", undefined());
     }
 }
