@@ -1,11 +1,7 @@
-use std::{borrow::Borrow, cmp::Ordering, str::FromStr};
-
-use num::{BigInt, BigRational, FromPrimitive};
+use self::ast_helpers::{int, prd};
+use num::{BigInt, BigRational};
 use rust_decimal::Decimal;
-
-use crate::tokenize::tokens::Token;
-
-use self::ast_helpers::{exp, int};
+use std::{borrow::Borrow, cmp::Ordering, ops::Neg};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Ast {
@@ -15,11 +11,11 @@ pub enum Ast {
     Frc(BigRational),
     Neg(Box<Ast>),
     Fac(Box<Ast>),
-    Add(Vec<Ast>),
-    Mul(Vec<Ast>),
-    Sub(Box<Ast>, Box<Ast>),
-    Div(Box<Ast>, Box<Ast>),
-    Exp(Box<Ast>, Box<Ast>),
+    Sum(Vec<Ast>),
+    Prd(Vec<Ast>),
+    Dif(Box<Ast>, Box<Ast>),
+    Quo(Box<Ast>, Box<Ast>),
+    Pow(Box<Ast>, Box<Ast>),
 }
 impl Ast {
     pub fn from_dec(dec: Decimal) -> Self {
@@ -40,6 +36,66 @@ impl Ast {
     pub fn from_int(int: BigInt) -> Self {
         Self::Int(int)
     }
+
+    pub fn simplify(self) -> Self {
+        match self {
+            ast @ (Ast::Und | Ast::Sym(_) | Ast::Int(_)) => ast,
+            Ast::Frc(frc) => Self::simplify_fraction(frc),
+            Ast::Neg(operand) => Self::simplify_negation(*operand),
+            Ast::Fac(operand) => Self::simplify_factorial(*operand),
+            Ast::Sum(operands) => Self::simplify_sum(operands),
+            Ast::Prd(operands) => Self::simplify_product(operands),
+            Ast::Dif(l, r) => Self::simplify_difference(*l, *r),
+            Ast::Quo(l, r) => Self::simplify_quotient(*l, *r),
+            Ast::Pow(base, exp) => Self::simplify_power(*base, *exp),
+        }
+    }
+
+    fn simplify_fraction(frc: BigRational) -> Self {
+        Self::from_frac(frc)
+    }
+
+    fn simplify_negation(operand: Ast) -> Self {
+        match operand {
+            und @ Ast::Und => und,
+            Ast::Int(int) => Self::from_int(int.neg()),
+            Ast::Frc(frc) => Self::from_frac(frc.neg()),
+            Ast::Prd(mut operands) => {
+                operands.push(int(-1));
+                Ast::Prd(operands)
+            }
+            operand @ (Ast::Sym(_) | Ast::Fac(_) | Ast::Sum(_) | Ast::Pow(_, _)) => {
+                prd(int(-1), operand)
+            }
+            Ast::Neg(_) | Ast::Dif(_, _) | Ast::Quo(_, _) => {
+                panic!("Cannot simplify negation of {:#?}", operand)
+            }
+        }
+    }
+
+    fn simplify_factorial(operand: Ast) -> Self {
+        todo!()
+    }
+
+    fn simplify_sum(operands: Vec<Ast>) -> Self {
+        todo!()
+    }
+
+    fn simplify_product(operands: Vec<Ast>) -> Self {
+        todo!()
+    }
+
+    fn simplify_difference(l: Ast, r: Ast) -> Self {
+        todo!()
+    }
+
+    fn simplify_quotient(l: Ast, r: Ast) -> Self {
+        todo!()
+    }
+
+    fn simplify_power(base: Ast, exponent: Ast) -> Self {
+        todo!()
+    }
 }
 impl PartialOrd for Ast {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -54,11 +110,11 @@ impl PartialOrd for Ast {
             (Ast::Sym(s), Ast::Sym(o)) => s.partial_cmp(o),
 
             // O-3
-            (Ast::Add(s), Ast::Add(o)) => compare_operands(s, o),
-            (Ast::Mul(s), Ast::Mul(o)) => compare_operands(s, o),
+            (Ast::Sum(s), Ast::Sum(o)) => compare_operands(s, o),
+            (Ast::Prd(s), Ast::Prd(o)) => compare_operands(s, o),
 
             // O-4
-            (Ast::Exp(s_base, s_exp), Ast::Exp(o_base, o_exp)) => {
+            (Ast::Pow(s_base, s_exp), Ast::Pow(o_base, o_exp)) => {
                 if s_base != o_base {
                     // O-4-1
                     s_base.partial_cmp(o_base)
@@ -78,20 +134,20 @@ impl PartialOrd for Ast {
             (_, Ast::Frc(_)) => Some(Ordering::Greater),
 
             // O-8
-            (Ast::Mul(s), o @ Ast::Exp(..))
-            | (Ast::Mul(s), o @ Ast::Add(..))
-            | (Ast::Mul(s), o @ Ast::Fac(..))
-            | (Ast::Mul(s), o @ Ast::Sym(..)) => compare_operands(s, &[o]),
+            (Ast::Prd(s), o @ Ast::Pow(..))
+            | (Ast::Prd(s), o @ Ast::Sum(..))
+            | (Ast::Prd(s), o @ Ast::Fac(..))
+            | (Ast::Prd(s), o @ Ast::Sym(..)) => compare_operands(s, &[o]),
 
-            (s @ Ast::Exp(..), o @ Ast::Mul(..))
-            | (s @ Ast::Add(..), o @ Ast::Mul(..))
-            | (s @ Ast::Fac(..), o @ Ast::Mul(..))
-            | (s @ Ast::Sym(..), o @ Ast::Mul(..)) => o.partial_cmp(s).map(Ordering::reverse),
+            (s @ Ast::Pow(..), o @ Ast::Prd(..))
+            | (s @ Ast::Sum(..), o @ Ast::Prd(..))
+            | (s @ Ast::Fac(..), o @ Ast::Prd(..))
+            | (s @ Ast::Sym(..), o @ Ast::Prd(..)) => o.partial_cmp(s).map(Ordering::reverse),
 
             // O-9
-            (Ast::Exp(s_base, s_exp), o_base @ Ast::Add(..))
-            | (Ast::Exp(s_base, s_exp), o_base @ Ast::Fac(..))
-            | (Ast::Exp(s_base, s_exp), o_base @ Ast::Sym(..)) => {
+            (Ast::Pow(s_base, s_exp), o_base @ Ast::Sum(..))
+            | (Ast::Pow(s_base, s_exp), o_base @ Ast::Fac(..))
+            | (Ast::Pow(s_base, s_exp), o_base @ Ast::Sym(..)) => {
                 // Treat other expression as exponent with power of one,
                 // then user O-4 rules
                 if &**s_base != o_base {
@@ -103,16 +159,16 @@ impl PartialOrd for Ast {
                 }
             }
 
-            (s @ Ast::Add(..), o @ Ast::Exp(..))
-            | (s @ Ast::Fac(..), o @ Ast::Exp(..))
-            | (s @ Ast::Sym(..), o @ Ast::Exp(..)) => o.partial_cmp(s).map(Ordering::reverse),
+            (s @ Ast::Sum(..), o @ Ast::Pow(..))
+            | (s @ Ast::Fac(..), o @ Ast::Pow(..))
+            | (s @ Ast::Sym(..), o @ Ast::Pow(..)) => o.partial_cmp(s).map(Ordering::reverse),
 
             // O-10
-            (Ast::Add(s), o @ Ast::Fac(..)) | (Ast::Add(s), o @ Ast::Sym(..)) => {
+            (Ast::Sum(s), o @ Ast::Fac(..)) | (Ast::Sum(s), o @ Ast::Sym(..)) => {
                 compare_operands(s, &[o])
             }
 
-            (s @ Ast::Fac(..), o @ Ast::Add(..)) | (s @ Ast::Sym(..), o @ Ast::Add(..)) => {
+            (s @ Ast::Fac(..), o @ Ast::Sum(..)) | (s @ Ast::Sym(..), o @ Ast::Sum(..)) => {
                 o.partial_cmp(s).map(Ordering::reverse)
             }
 
@@ -132,8 +188,8 @@ impl PartialOrd for Ast {
 
             (Ast::Und, _) | (_, Ast::Und) => panic!("Cannot sort undefined"),
             (Ast::Neg(..), _) | (_, Ast::Neg(..)) => panic!("Cannot sort negation"),
-            (Ast::Sub(..), _) | (_, Ast::Sub(..)) => panic!("Cannot sort subtraction"),
-            (Ast::Div(..), _) | (_, Ast::Div(..)) => panic!("Cannot sort division"),
+            (Ast::Dif(..), _) | (_, Ast::Dif(..)) => panic!("Cannot sort subtraction"),
+            (Ast::Quo(..), _) | (_, Ast::Quo(..)) => panic!("Cannot sort division"),
         }
     }
 }
@@ -181,24 +237,24 @@ pub mod ast_helpers {
         Ast::Neg(Box::new(operand))
     }
 
-    pub fn add(l: Ast, r: Ast) -> Ast {
-        Ast::Add(vec![l, r])
+    pub fn sum(l: Ast, r: Ast) -> Ast {
+        Ast::Sum(vec![l, r])
     }
 
-    pub fn mul(l: Ast, r: Ast) -> Ast {
-        Ast::Add(vec![l, r])
+    pub fn prd(l: Ast, r: Ast) -> Ast {
+        Ast::Sum(vec![l, r])
     }
 
-    pub fn sub(l: Ast, r: Ast) -> Ast {
-        Ast::Sub(Box::new(l), Box::new(r))
+    pub fn dif(l: Ast, r: Ast) -> Ast {
+        Ast::Dif(Box::new(l), Box::new(r))
     }
 
-    pub fn div(l: Ast, r: Ast) -> Ast {
-        Ast::Div(Box::new(l), Box::new(r))
+    pub fn quo(l: Ast, r: Ast) -> Ast {
+        Ast::Quo(Box::new(l), Box::new(r))
     }
 
-    pub fn exp(l: Ast, r: Ast) -> Ast {
-        Ast::Exp(Box::new(l), Box::new(r))
+    pub fn pow(l: Ast, r: Ast) -> Ast {
+        Ast::Pow(Box::new(l), Box::new(r))
     }
 
     pub fn sym(name: &str) -> Ast {
@@ -209,7 +265,7 @@ pub mod ast_helpers {
         Ast::Int(BigInt::from_i128(int).unwrap())
     }
 
-    pub fn frac(num: i128, den: i128) -> Ast {
+    pub fn frc(num: i128, den: i128) -> Ast {
         Ast::Frc(BigRational::new(
             BigInt::from_i128(num).unwrap(),
             BigInt::from_i128(den).unwrap(),

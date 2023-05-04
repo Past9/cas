@@ -1,15 +1,13 @@
 pub mod tokens;
 
+use self::tokens::Token::{self, *};
+use crate::{error::SyntaxError, Spanned};
 use chumsky::{
     primitive::{choice, end, just},
     recovery::skip_then_retry_until,
     text::{self, TextParser},
     Parser,
 };
-
-use crate::{error::SyntaxError, Spanned};
-
-use self::tokens::Token::{self, *};
 
 #[derive(Debug)]
 pub struct TokenizerResult {

@@ -92,7 +92,7 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
         let exp = neg
             .clone()
             .then(just(Token::Caret).then(neg).repeated())
-            .foldl(|left, (op, right)| exp(left, right))
+            .foldl(|left, (op, right)| pow(left, right))
             .boxed();
 
         let mul_div = exp
@@ -105,9 +105,9 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
             )
             .foldl(|left, (op, right)|  { 
                 if op == Token::Asterisk {
-                    mul(left, right) 
+                    prd(left, right) 
                 } else if op == Token::FwdSlash {
-                    div(left, right)
+                    quo(left, right)
                 } else {
                     panic!("Invalid operator at mul/div precedence level: {:?}", op)
                 }
@@ -124,9 +124,9 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
             )
             .foldl(|left, (op, right)| {
                 if op == Token::Plus {
-                    add(left, right)
+                    sum(left, right)
                 } else if op == Token::Minus {
-                    sub(left, right)
+                    dif(left, right)
                 } else {
                     panic!("Invalid operator at add/sub precedence level: {:?}", op)
                 }
@@ -140,7 +140,7 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::ast::ast_helpers::{add, div, exp, fac, frac, int, mul, neg, sub, sym, und};
+    use crate::parse::ast::ast_helpers::{sum, quo, pow, fac, frc, int, prd, neg, dif, sym, und};
 
     use super::*;
 
@@ -186,37 +186,37 @@ mod tests {
 
     #[test]
     fn pos_decimal() {
-        assert_eq!(parse_src("123.456").ast.unwrap(), frac(123456, 1000));
+        assert_eq!(parse_src("123.456").ast.unwrap(), frc(123456, 1000));
     }
 
     #[test]
     fn neg_decimal() {
-        assert_eq!(parse_src("-123.456").ast.unwrap(), neg(frac(123456, 1000)));
+        assert_eq!(parse_src("-123.456").ast.unwrap(), neg(frc(123456, 1000)));
     }
 
     #[test]
     fn single_add() {
-        assert_eq!(parse_src("1 + 2").ast.unwrap(), add(int(1), int(2)));
+        assert_eq!(parse_src("1 + 2").ast.unwrap(), sum(int(1), int(2)));
     }
 
     #[test]
     fn multiple_add() {
         assert_eq!(
             parse_src("1 + 2 + 3").ast.unwrap(),
-            add(add(int(1), int(2)), int(3))
+            sum(sum(int(1), int(2)), int(3))
         );
     }
 
     #[test]
     fn single_sub() {
-        assert_eq!(parse_src("1 - 2").ast.unwrap(), sub(int(1), int(2)));
+        assert_eq!(parse_src("1 - 2").ast.unwrap(), dif(int(1), int(2)));
     }
 
     #[test]
     fn multiple_sub() {
         assert_eq!(
             parse_src("1 - 2 - 3").ast.unwrap(),
-            sub(sub(int(1), int(2)), int(3))
+            dif(dif(int(1), int(2)), int(3))
         );
     }
 
@@ -224,7 +224,7 @@ mod tests {
     fn add_sub() {
         assert_eq!(
             parse_src("1 + 2 - 3").ast.unwrap(),
-            sub(add(int(1), int(2)), int(3))
+            dif(sum(int(1), int(2)), int(3))
         );
     }
 
@@ -232,33 +232,33 @@ mod tests {
     fn sub_add() {
         assert_eq!(
             parse_src("1 - 2 + 3").ast.unwrap(),
-            add(sub(int(1), int(2)), int(3))
+            sum(dif(int(1), int(2)), int(3))
         );
     }
 
     #[test]
     fn single_mul() {
-        assert_eq!(parse_src("1 * 2").ast.unwrap(), mul(int(1), int(2)));
+        assert_eq!(parse_src("1 * 2").ast.unwrap(), prd(int(1), int(2)));
     }
 
     #[test]
     fn multiple_mul() {
         assert_eq!(
             parse_src("1 * 2 * 3").ast.unwrap(),
-            mul(mul(int(1), int(2)), int(3))
+            prd(prd(int(1), int(2)), int(3))
         );
     }
 
     #[test]
     fn single_div() {
-        assert_eq!(parse_src("1 / 2").ast.unwrap(), div(int(1), int(2)));
+        assert_eq!(parse_src("1 / 2").ast.unwrap(), quo(int(1), int(2)));
     }
 
     #[test]
     fn multiple_div() {
         assert_eq!(
             parse_src("1 / 2 / 3").ast.unwrap(),
-            div(div(int(1), int(2)), int(3))
+            quo(quo(int(1), int(2)), int(3))
         );
     }
 
@@ -266,7 +266,7 @@ mod tests {
     fn mul_div() {
         assert_eq!(
             parse_src("1 * 2 / 3").ast.unwrap(),
-            div(mul(int(1), int(2)), int(3))
+            quo(prd(int(1), int(2)), int(3))
         );
     }
 
@@ -274,20 +274,20 @@ mod tests {
     fn div_mul() {
         assert_eq!(
             parse_src("1 / 2 * 3").ast.unwrap(),
-            mul(div(int(1), int(2)), int(3))
+            prd(quo(int(1), int(2)), int(3))
         );
     }
 
     #[test]
     fn single_exp() {
-        assert_eq!(parse_src("1 ^ 2").ast.unwrap(), exp(int(1), int(2)));
+        assert_eq!(parse_src("1 ^ 2").ast.unwrap(), pow(int(1), int(2)));
     }
 
     #[test]
     fn multiple_exp() {
         assert_eq!(
             parse_src("1 ^ 2 ^ 3").ast.unwrap(),
-            exp(exp(int(1), int(2)), int(3))
+            pow(pow(int(1), int(2)), int(3))
         );
     }
 
@@ -296,21 +296,21 @@ mod tests {
         // Without parens (multiplication before addition)
         assert_eq!(
             parse_src("1 + 2 * 3").ast.unwrap(),
-            add(int(1), mul(int(2), int(3)))
+            sum(int(1), prd(int(2), int(3)))
         );
         assert_eq!(
             parse_src("1 * 2 + 3").ast.unwrap(),
-            add(mul(int(1), int(2)), int(3))
+            sum(prd(int(1), int(2)), int(3))
         );
 
         // With parens (order is changed, addition before multiplication)
         assert_eq!(
             parse_src("(1 + 2) * 3").ast.unwrap(),
-            mul(add(int(1), int(2)), int(3))
+            prd(sum(int(1), int(2)), int(3))
         );
         assert_eq!(
             parse_src("1 * (2 + 3)").ast.unwrap(),
-            mul(int(1), add(int(2), int(3)))
+            prd(int(1), sum(int(2), int(3)))
         );
     }
 
@@ -318,12 +318,12 @@ mod tests {
     fn pemdas() {
         assert_eq!(
             parse_src("2 * 6 / (8 - 2) - 2 ^ 3 + 3 * 4").ast.unwrap(),
-            add(
-                sub(
-                    div(mul(int(2), int(6)), sub(int(8), int(2))),
-                    exp(int(2), int(3))
+            sum(
+                dif(
+                    quo(prd(int(2), int(6)), dif(int(8), int(2))),
+                    pow(int(2), int(3))
                 ),
-                mul(int(3), int(4))
+                prd(int(3), int(4))
             )
         );
     }
@@ -332,7 +332,8 @@ mod tests {
     fn undefined() {
         assert_eq!(
             parse_src("undefined + x").ast.unwrap(),
-            add(und(), sym("x"))
+            sum(und(), sym("x"))
         )
     }
+
 }
