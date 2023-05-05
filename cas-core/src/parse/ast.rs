@@ -1,7 +1,13 @@
+use crate::parse::ast::ast_helpers::{pow, sum};
+
 use self::ast_helpers::{int, prd};
-use num::{BigInt, BigRational};
+use num::{BigInt, BigRational, FromPrimitive, One, Zero};
 use rust_decimal::Decimal;
-use std::{borrow::Borrow, cmp::Ordering, ops::Neg};
+use std::{
+    borrow::{Borrow, Cow},
+    cmp::Ordering,
+    ops::Neg,
+};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Ast {
@@ -82,7 +88,142 @@ impl Ast {
     }
 
     fn simplify_product(operands: Vec<Ast>) -> Self {
-        todo!()
+        let mut operands = operands
+            .into_iter()
+            // Simplify each operand first
+            .map(|op| op.simplify())
+            // Apply the Basic Associative Transformation
+            // (flatten operands that are products)
+            .flat_map(|op| match op {
+                operand @ (Ast::Und
+                | Ast::Sym(_)
+                | Ast::Int(_)
+                | Ast::Frc(_)
+                | Ast::Fac(_)
+                | Ast::Sum(_)
+                | Ast::Pow(_, _)) => vec![operand].into_iter(),
+                Ast::Prd(operands) => operands.into_iter(),
+
+                operand @ (Ast::Neg(_) | Ast::Dif(_, _) | Ast::Quo(_, _)) => {
+                    panic!("Cannot simplify product operand {:?}", operand)
+                }
+            })
+            .collect::<Vec<Ast>>();
+
+        // Apply the Basic Commutative Transformation
+        // (reorder the operands to a standard form)
+        operands.sort();
+
+        // Apply the Basic Power Transformation
+        // (combine like operands or powers with like bases into
+        // single operands by summing their exponents)
+        let operands = {
+            let mut new_operands = Vec::new();
+            let mut ops_iter = operands.into_iter();
+            let (mut cur_base, mut total_exp) = match ops_iter.next().unwrap() {
+                operand @ (Ast::Und
+                | Ast::Sym(_)
+                | Ast::Int(_)
+                | Ast::Frc(_)
+                | Ast::Neg(_)
+                | Ast::Fac(_)
+                | Ast::Sum(_)
+                | Ast::Prd(_)
+                | Ast::Dif(_, _)
+                | Ast::Quo(_, _)) => (operand, int(1)),
+                Ast::Pow(base, exp) => (*base, *exp),
+            };
+
+            for operand in ops_iter {
+                let (base, exp) = match operand {
+                    operand @ (Ast::Und
+                    | Ast::Sym(_)
+                    | Ast::Int(_)
+                    | Ast::Frc(_)
+                    | Ast::Neg(_)
+                    | Ast::Fac(_)
+                    | Ast::Sum(_)
+                    | Ast::Prd(_)
+                    | Ast::Dif(_, _)
+                    | Ast::Quo(_, _)) => (operand, int(1)),
+                    Ast::Pow(base, exp) => (*base, *exp),
+                };
+
+                if base == cur_base {
+                    total_exp = sum(total_exp, exp);
+                } else {
+                    new_operands.push(pow(cur_base, total_exp));
+                    cur_base = base;
+                    total_exp = exp;
+                }
+            }
+
+            new_operands.push(pow(cur_base, total_exp));
+
+            new_operands = new_operands.into_iter().map(|op| op.simplify()).collect();
+
+            new_operands.sort();
+
+            new_operands
+        };
+
+        // Apply the Basic Numerical Transformation
+        // (multiply all constant factors into a single constant)
+        let mut operands = {
+            let mut const_total = BigRational::from_i32(1).unwrap();
+            let mut new_operands = Vec::new();
+            for operand in operands.into_iter() {
+                match operand {
+                    Ast::Int(int) => {
+                        const_total *= BigRational::from_integer(int);
+                    }
+                    Ast::Frc(frc) => {
+                        const_total *= frc;
+                    }
+                    operand => new_operands.push(operand),
+                }
+            }
+
+            new_operands.insert(0, Ast::from_frac(const_total));
+
+            new_operands
+        };
+
+        // Basic Undefined Transformation
+        // (if any operand is undefined, the entire product
+        // is undefined)
+        if operands.iter().any(|op| op.is_undefined()) {
+            return Ast::Und;
+        }
+
+        if operands.len() == 0 {
+            // Shouldn't happen, but a product with no factors
+            // (not even a 1) is equal to zero
+            return int(0);
+        }
+
+        // Basic Identity Transformation 3.21
+        // (if a product contains the factor 0, the
+        // whole thing equals 0)
+        if operands.first().unwrap().is_int_zero() {
+            return int(0);
+        }
+
+        // Basic Identity Tranformation 3.22
+        // (if a product contains the factor 1, we can
+        // remove that factor)
+        if operands.first().unwrap().is_int_one() {
+            operands.remove(0);
+        }
+
+        // Basic Unary Transformation
+        // (if product has only one factor, just
+        // return that factor)
+        if operands.len() == 1 {
+            return operands.into_iter().next().unwrap();
+        }
+
+        Ast::Prd(operands)
     }
 
     fn simplify_difference(l: Ast, r: Ast) -> Self {
@@ -95,6 +236,27 @@ impl Ast {
 
     fn simplify_power(base: Ast, exponent: Ast) -> Self {
         todo!()
+    }
+
+    pub fn is_undefined(&self) -> bool {
+        match self {
+            Ast::Und => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_int_zero(&self) -> bool {
+        match self {
+            Ast::Int(int) => int.is_zero(),
+            _ => false,
+        }
+    }
+
+    pub fn is_int_one(&self) -> bool {
+        match self {
+            Ast::Int(int) => int.is_one(),
+            _ => false,
+        }
     }
 }
 impl PartialOrd for Ast {
