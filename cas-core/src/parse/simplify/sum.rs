@@ -10,14 +10,6 @@ impl Ast {
             return int(0);
         }
 
-        /*
-        // Simplify all operands
-        let operands = operands
-            .into_iter()
-            .map(Ast::simplify)
-            .collect::<Vec<Ast>>();
-        */
-
         // SSUM-1
         if operands.iter().any(Ast::is_undefined) {
             return Ast::Und;
@@ -35,7 +27,7 @@ impl Ast {
 
         // SSUM-4-3
         if operands.len() == 0 {
-            return int(1);
+            return int(0);
         }
 
         // SSUM-4-1
@@ -103,8 +95,7 @@ impl Ast {
 
                 if l_factor == r_factor {
                     let multiple = Self::simplify_product(vec![
-                        l_constant.into_owned(),
-                        r_constant.into_owned(),
+                        Self::simplify_sum(vec![l_constant.into_owned(), r_constant.into_owned()]),
                         l_factor.into_owned(),
                     ]);
 
@@ -162,10 +153,6 @@ impl Ast {
     }
 
     fn merge_sums(p: Vec<Ast>, q: Vec<Ast>) -> Vec<Ast> {
-        if p.len() == 0 && q.len() == 0 {
-            return vec![int(0)];
-        }
-
         // MSUM-1
         if q.len() == 0 {
             return p;

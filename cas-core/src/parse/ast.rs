@@ -41,13 +41,17 @@ impl Ast {
         match self {
             ast @ (Ast::Und | Ast::Sym(_) | Ast::Int(_)) => ast,
             Ast::Frc(frc) => Self::simplify_fraction(frc),
-            Ast::Neg(operand) => Self::simplify_negation(*operand),
-            Ast::Fac(operand) => Self::simplify_factorial(*operand),
-            Ast::Sum(operands) => Self::simplify_sum(operands),
-            Ast::Prd(operands) => Self::simplify_product(operands),
-            Ast::Dif(l, r) => Self::simplify_difference(*l, *r),
-            Ast::Quo(l, r) => Self::simplify_quotient(*l, *r),
-            Ast::Pow(base, exp) => Self::simplify_power(*base, *exp),
+            Ast::Neg(operand) => Self::simplify_negation((*operand).simplify()),
+            Ast::Fac(operand) => Self::simplify_factorial((*operand).simplify()),
+            Ast::Sum(operands) => {
+                Self::simplify_sum(operands.into_iter().map(|op| op.simplify()).collect())
+            }
+            Ast::Prd(operands) => {
+                Self::simplify_product(operands.into_iter().map(|op| op.simplify()).collect())
+            }
+            Ast::Dif(l, r) => Self::simplify_difference((*l).simplify(), (*r).simplify()),
+            Ast::Quo(l, r) => Self::simplify_quotient((*l).simplify(), (*r).simplify()),
+            Ast::Pow(base, exp) => Self::simplify_power((*base).simplify(), (*exp).simplify()),
         }
     }
 
@@ -222,8 +226,8 @@ impl Ord for Ast {
 }
 
 fn compare_operands<T: Borrow<Ast>, U: Borrow<Ast>>(l: &[T], r: &[U]) -> Option<Ordering> {
-    let mut m = l.len() as isize;
-    let mut n = r.len() as isize;
+    let mut m = l.len() as isize - 1;
+    let mut n = r.len() as isize - 1;
 
     // First iteration is O-1
     // Subsequent ones are O-2
@@ -263,7 +267,7 @@ pub mod ast_helpers {
     }
 
     pub fn prd<const N: usize>(operands: [Ast; N]) -> Ast {
-        Ast::Sum(operands.to_vec())
+        Ast::Prd(operands.to_vec())
     }
 
     pub fn dif(l: Ast, r: Ast) -> Ast {
@@ -295,5 +299,25 @@ pub mod ast_helpers {
 
     pub fn und() -> Ast {
         Ast::Und
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test_helpers {
+    use crate::parse::parse_src;
+
+    use super::Ast;
+
+    fn ast_from_src(src: &str) -> Ast {
+        let result = parse_src(src);
+        result.ast.unwrap()
+    }
+
+    pub fn test_src(src: &str, expected: Ast) {
+        assert_eq!(ast_from_src(src), expected)
+    }
+
+    pub fn test_simplified_src(src: &str, expected: Ast) {
+        assert_eq!(ast_from_src(src).simplify(), expected)
     }
 }

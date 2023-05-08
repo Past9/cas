@@ -35,16 +35,6 @@ impl Ast {
     }
 
     fn simplify_integer_power(base: Self, exponent: BigInt) -> Self {
-        // SINTPOW-2
-        if exponent.is_zero() {
-            return int(1);
-        }
-
-        // SINTPOW-3
-        if exponent.is_one() {
-            return base;
-        }
-
         // SINTPOW-1
         if let Self::Int(base_int) = &base {
             if exponent.is_positive() {
@@ -61,8 +51,18 @@ impl Ast {
             if exponent.is_positive() {
                 return Self::from_frac(Pow::pow(base_frc, exponent));
             } else if exponent.is_negative() {
-                return Self::from_frac(Pow::pow(base_frc.recip(), exponent));
+                return Self::from_frac(Pow::pow(base_frc.recip(), -exponent));
             }
+        }
+
+        // SINTPOW-2
+        if exponent.is_zero() {
+            return int(1);
+        }
+
+        // SINTPOW-3
+        if exponent.is_one() {
+            return base;
         }
 
         // SINTPOW-4
@@ -79,6 +79,7 @@ impl Ast {
 
         // SINTPOW-5
         if let Self::Prd(factors) = base {
+            println!("SINTPOW5");
             return Self::Prd(
                 factors
                     .into_iter()
@@ -90,5 +91,61 @@ impl Ast {
 
         // SINTPOW-6
         pow(base, Self::Int(exponent))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parse::ast::{ast_helpers::*, test_helpers::test_simplified_src};
+
+    #[test]
+    fn simplifies_int_power() {
+        test_simplified_src("2 ^ 3", int(8));
+        test_simplified_src("-2 ^ 3", int(-8));
+        test_simplified_src("-2 ^ 2", int(4));
+        test_simplified_src("2 ^ -3", frc(1, 8));
+        test_simplified_src("-2 ^ -3", frc(-1, 8));
+        test_simplified_src("-2 ^ -2", frc(1, 4));
+    }
+
+    #[test]
+    fn does_not_simplify_perfect_roots() {
+        // Does not become 2
+        test_simplified_src("4 ^ 0.5", pow(int(4), frc(1, 2)));
+
+        // Does not become 2
+        test_simplified_src("8 ^ (1/3)", pow(int(8), frc(1, 3)));
+
+        // Does not become 1/2
+        test_simplified_src("4 ^ -0.5", pow(int(4), frc(-1, 2)));
+
+        // Does not become 1/2
+        test_simplified_src("8 ^ -(1/3)", pow(int(8), frc(-1, 3)));
+
+        // Does not become i (imaginary number)
+        test_simplified_src("-1 ^ 0.5", pow(int(-1), frc(1, 2)));
+
+        // Does not become sqrt(2) * i (imaginary number)
+        test_simplified_src("-2 ^ 0.5", pow(int(-2), frc(1, 2)));
+    }
+
+    #[test]
+    fn multiplies_integer_exponents() {
+        test_simplified_src("2 ^ 2 ^ 3", int(64));
+        test_simplified_src("x ^ 2 ^ 3", pow(sym("x"), int(6)));
+        test_simplified_src("x ^ 2 ^ -3", pow(sym("x"), int(-6)));
+        test_simplified_src("x ^ 2 ^ -2", pow(sym("x"), int(-4)));
+        test_simplified_src("x ^ y ^ 2", pow(sym("x"), prd([int(2), sym("y")])));
+        test_simplified_src("((x ^ 0.5) ^ 0.5) ^ 8", pow(sym("x"), int(2)));
+        test_simplified_src(
+            "((x * y) ^ 0.5 * z ^ 2) ^ 2",
+            prd([sym("x"), sym("y"), pow(sym("z"), int(4))]),
+        );
+    }
+
+    #[test]
+    fn does_not_multiply_fractional_exponent_of_integer_exponent() {
+        // Does not become `x ^ 1` -> `x`
+        test_simplified_src("x ^ 2 ^ 0.5", pow(pow(sym("x"), int(2)), frc(1, 2)));
     }
 }

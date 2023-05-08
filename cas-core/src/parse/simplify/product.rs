@@ -10,14 +10,6 @@ impl Ast {
             return int(1);
         }
 
-        /*
-        // Simplify all operands
-        let operands = operands
-            .into_iter()
-            .map(Ast::simplify)
-            .collect::<Vec<Ast>>();
-        */
-
         // SPRD-1
         if operands.iter().any(Ast::is_undefined) {
             return Ast::Und;
@@ -162,10 +154,6 @@ impl Ast {
     }
 
     fn merge_products(p: Vec<Ast>, q: Vec<Ast>) -> Vec<Ast> {
-        if p.len() == 0 && q.len() == 0 {
-            return vec![int(1)];
-        }
-
         // MPRD-1
         if q.len() == 0 {
             return p;
@@ -238,5 +226,41 @@ impl Ast {
             | Ast::Quo(_, _)) => (Cow::Borrowed(operand), Cow::Owned(int(1))),
             Ast::Pow(base, exp) => (Cow::Borrowed(base), Cow::Borrowed(exp)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parse::ast::{ast_helpers::*, test_helpers::test_simplified_src};
+
+    #[test]
+    fn simplify_const_mul() {
+        test_simplified_src("1 * 2", int(2));
+        test_simplified_src("0.5 * 2", int(1));
+        test_simplified_src("0.5 * 3", frc(3, 2));
+    }
+
+    #[test]
+    fn simplify_symbol_mul() {
+        test_simplified_src("0.5 * x * 3", prd([frc(3, 2), sym("x")]));
+        test_simplified_src("0.5 * -x * 3", prd([frc(-3, 2), sym("x")]));
+        test_simplified_src("(x / 1) * (1 / x)", int(1));
+        test_simplified_src("x * y * x", prd([pow(sym("x"), int(2)), sym("y")]));
+        test_simplified_src("x * y * x ^ 2", prd([pow(sym("x"), int(3)), sym("y")]));
+        test_simplified_src("y * x * y", prd([sym("x"), pow(sym("y"), int(2))]));
+    }
+
+    #[test]
+    fn does_not_distribute_factor() {
+        // Does not become `2 * x + 2 * y`
+        test_simplified_src("2 * (x + y)", prd([int(2), sum([sym("x"), sym("y")])]));
+    }
+
+    #[test]
+    fn adds_exponents() {
+        test_simplified_src("x ^ 2 * x ^ 3", pow(sym("x"), int(5)));
+        test_simplified_src("x ^ 3 * x ^ -2", sym("x"));
+        test_simplified_src("x ^ 2 * x ^ -3", pow(sym("x"), int(-1)));
+        test_simplified_src("x ^ 3 * x ^ -3", int(1));
     }
 }
