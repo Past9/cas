@@ -5,6 +5,6 @@ use crate::parse::ast::{
 
 impl Ast {
     pub(crate) fn simplify_quotient(l: Self, r: Self) -> Self {
-        prd(l, pow(r, int(-1)).simplify()).simplify()
+        prd([l, pow(r, int(-1)).simplify()]).simplify()
     }
 }

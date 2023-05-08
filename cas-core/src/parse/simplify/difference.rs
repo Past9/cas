@@ -5,6 +5,6 @@ use crate::parse::ast::{
 
 impl Ast {
     pub(crate) fn simplify_difference(l: Self, r: Self) -> Self {
-        sum(l, neg(r).simplify()).simplify()
+        sum([l, neg(r).simplify()]).simplify()
     }
 }

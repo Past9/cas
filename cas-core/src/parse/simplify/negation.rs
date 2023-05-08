@@ -16,7 +16,7 @@ impl Ast {
                 Self::Prd(operands)
             }
             operand @ (Self::Sym(_) | Self::Fac(_) | Self::Sum(_) | Self::Pow(_, _)) => {
-                prd(int(-1), operand)
+                prd([int(-1), operand])
             }
             Self::Neg(_) | Self::Dif(_, _) | Self::Quo(_, _) => {
                 panic!("Cannot simplify negation of {:#?}", operand)

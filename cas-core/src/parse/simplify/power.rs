@@ -67,7 +67,7 @@ impl Ast {
 
         // SINTPOW-4
         if let Self::Pow(base_base, base_exp) = base {
-            let p = prd(*base_exp, Self::Int(exponent)).simplify();
+            let p = prd([*base_exp, Self::Int(exponent)]).simplify();
             if let Self::Int(p) = p {
                 // SINTPOW-4-1
                 return Self::simplify_integer_power(*base_base, p);

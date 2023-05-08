@@ -81,19 +81,19 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
 
         let factorial = atom
             .then(just(Token::Bang).repeated())
-            .foldl(|operand, op| fac(operand))
+            .foldl(|operand, _op| fac(operand))
             .boxed();
 
         let neg = just(Token::Minus)
             .repeated()
             .then(factorial)
-            .foldr(|op, operand| neg(operand))
+            .foldr(|_op, operand| neg(operand))
             .boxed();
 
         let exp = neg
             .clone()
             .then(just(Token::Caret).then(neg).repeated())
-            .foldl(|left, (op, right)| pow(left, right))
+            .foldl(|left, (_op, right)| pow(left, right))
             .boxed();
 
         let mul_div = exp
@@ -106,7 +106,7 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
             )
             .foldl(|left, (op, right)|  { 
                 if op == Token::Asterisk {
-                    prd(left, right) 
+                    prd([left, right]) 
                 } else if op == Token::FwdSlash {
                     quo(left, right)
                 } else {
@@ -125,7 +125,7 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
             )
             .foldl(|left, (op, right)| {
                 if op == Token::Plus {
-                    sum(left, right)
+                    sum([left, right])
                 } else if op == Token::Minus {
                     dif(left, right)
                 } else {
@@ -197,14 +197,14 @@ mod tests {
 
     #[test]
     fn single_add() {
-        assert_eq!(parse_src("1 + 2").ast.unwrap(), sum(int(1), int(2)));
+        assert_eq!(parse_src("1 + 2").ast.unwrap(), sum([int(1), int(2)]));
     }
 
     #[test]
     fn multiple_add() {
         assert_eq!(
             parse_src("1 + 2 + 3").ast.unwrap(),
-            sum(sum(int(1), int(2)), int(3))
+            sum([sum([int(1), int(2)]), int(3)])
         );
     }
 
@@ -225,7 +225,7 @@ mod tests {
     fn add_sub() {
         assert_eq!(
             parse_src("1 + 2 - 3").ast.unwrap(),
-            dif(sum(int(1), int(2)), int(3))
+            dif(sum([int(1), int(2)]), int(3))
         );
     }
 
@@ -233,20 +233,20 @@ mod tests {
     fn sub_add() {
         assert_eq!(
             parse_src("1 - 2 + 3").ast.unwrap(),
-            sum(dif(int(1), int(2)), int(3))
+            sum([dif(int(1), int(2)), int(3)])
         );
     }
 
     #[test]
     fn single_mul() {
-        assert_eq!(parse_src("1 * 2").ast.unwrap(), prd(int(1), int(2)));
+        assert_eq!(parse_src("1 * 2").ast.unwrap(), prd([int(1), int(2)]));
     }
 
     #[test]
     fn multiple_mul() {
         assert_eq!(
             parse_src("1 * 2 * 3").ast.unwrap(),
-            prd(prd(int(1), int(2)), int(3))
+            prd([prd([int(1), int(2)]), int(3)])
         );
     }
 
@@ -267,7 +267,7 @@ mod tests {
     fn mul_div() {
         assert_eq!(
             parse_src("1 * 2 / 3").ast.unwrap(),
-            quo(prd(int(1), int(2)), int(3))
+            quo(prd([int(1), int(2)]), int(3))
         );
     }
 
@@ -275,7 +275,7 @@ mod tests {
     fn div_mul() {
         assert_eq!(
             parse_src("1 / 2 * 3").ast.unwrap(),
-            prd(quo(int(1), int(2)), int(3))
+            prd([quo(int(1), int(2)), int(3)])
         );
     }
 
@@ -297,21 +297,21 @@ mod tests {
         // Without parens (multiplication before addition)
         assert_eq!(
             parse_src("1 + 2 * 3").ast.unwrap(),
-            sum(int(1), prd(int(2), int(3)))
+            sum([int(1), prd([int(2), int(3)])])
         );
         assert_eq!(
             parse_src("1 * 2 + 3").ast.unwrap(),
-            sum(prd(int(1), int(2)), int(3))
+            sum([prd([int(1), int(2)]), int(3)])
         );
 
         // With parens (order is changed, addition before multiplication)
         assert_eq!(
             parse_src("(1 + 2) * 3").ast.unwrap(),
-            prd(sum(int(1), int(2)), int(3))
+            prd([sum([int(1), int(2)]), int(3)])
         );
         assert_eq!(
             parse_src("1 * (2 + 3)").ast.unwrap(),
-            prd(int(1), sum(int(2), int(3)))
+            prd([int(1), sum([int(2), int(3)])])
         );
     }
 
@@ -319,13 +319,13 @@ mod tests {
     fn pemdas() {
         assert_eq!(
             parse_src("2 * 6 / (8 - 2) - 2 ^ 3 + 3 * 4").ast.unwrap(),
-            sum(
+            sum([
                 dif(
-                    quo(prd(int(2), int(6)), dif(int(8), int(2))),
+                    quo(prd([int(2), int(6)]), dif(int(8), int(2))),
                     pow(int(2), int(3))
                 ),
-                prd(int(3), int(4))
-            )
+                prd([int(3), int(4)])
+            ])
         );
     }
 
@@ -333,7 +333,7 @@ mod tests {
     fn undefined() {
         assert_eq!(
             parse_src("undefined + x").ast.unwrap(),
-            sum(und(), sym("x"))
+            sum([und(), sym("x")])
         )
     }
 

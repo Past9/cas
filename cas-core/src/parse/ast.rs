@@ -258,12 +258,12 @@ pub mod ast_helpers {
         Ast::Neg(Box::new(operand))
     }
 
-    pub fn sum(l: Ast, r: Ast) -> Ast {
-        Ast::Sum(vec![l, r])
+    pub fn sum<const N: usize>(operands: [Ast; N]) -> Ast {
+        Ast::Sum(operands.to_vec())
     }
 
-    pub fn prd(l: Ast, r: Ast) -> Ast {
-        Ast::Sum(vec![l, r])
+    pub fn prd<const N: usize>(operands: [Ast; N]) -> Ast {
+        Ast::Sum(operands.to_vec())
     }
 
     pub fn dif(l: Ast, r: Ast) -> Ast {
