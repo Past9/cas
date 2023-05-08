@@ -1,13 +1,7 @@
-use crate::parse::ast::ast_helpers::{pow, sum};
-
-use self::ast_helpers::{int, prd};
-use num::{BigInt, BigRational, FromPrimitive, One, Zero};
+use self::ast_helpers::int;
+use num::{BigInt, BigRational, One, Signed, Zero};
 use rust_decimal::Decimal;
-use std::{
-    borrow::{Borrow, Cow},
-    cmp::Ordering,
-    ops::Neg,
-};
+use std::{borrow::Borrow, cmp::Ordering};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Ast {
@@ -57,422 +51,29 @@ impl Ast {
         }
     }
 
-    fn simplify_fraction(frc: BigRational) -> Self {
-        Self::from_frac(frc)
-    }
-
-    fn simplify_negation(operand: Ast) -> Self {
-        match operand {
-            und @ Ast::Und => und,
-            Ast::Int(int) => Self::from_int(int.neg()),
-            Ast::Frc(frc) => Self::from_frac(frc.neg()),
-            Ast::Prd(mut operands) => {
-                operands.push(int(-1));
-                Ast::Prd(operands)
-            }
-            operand @ (Ast::Sym(_) | Ast::Fac(_) | Ast::Sum(_) | Ast::Pow(_, _)) => {
-                prd(int(-1), operand)
-            }
-            Ast::Neg(_) | Ast::Dif(_, _) | Ast::Quo(_, _) => {
-                panic!("Cannot simplify negation of {:#?}", operand)
-            }
-        }
-    }
-
-    fn simplify_factorial(operand: Ast) -> Self {
-        todo!()
-    }
-
-    fn simplify_sum(operands: Vec<Ast>) -> Self {
-        todo!()
-    }
-
-    fn simplify_product_2(operands: Vec<Ast>) -> Self {
-        if operands.len() == 0 {
-            return int(1);
-        }
-
-        // Simplify all operands
-        let operands = operands
-            .into_iter()
-            .map(Ast::simplify)
-            .collect::<Vec<Ast>>();
-
-        // SPRD-1
-        if operands.iter().any(Ast::is_undefined) {
-            return Ast::Und;
-        }
-
-        // SPRD-2
-        if operands.iter().any(Ast::is_int_zero) {
-            return int(0);
-        }
-
-        // SPRD-3
-        if operands.len() == 1 {
-            return operands.into_iter().next().unwrap();
-        }
-
-        // SPRD-4
-        let operands = Self::simplify_product_rec(operands);
-
-        // SPRD-4-3
-        if operands.len() == 0 {
-            return int(1);
-        }
-
-        // SPRD-4-1
-        if operands.len() == 1 {
-            return operands.into_iter().next().unwrap();
-        }
-
-        // SPRD-4-2
-        if operands.len() >= 2 {
-            return Self::Prd(operands);
-        }
-
-        panic!("Impossible branch");
-    }
-
-    fn simplify_product_rec(mut operands: Vec<Ast>) -> Vec<Ast> {
-        if operands.len() < 2 {
-            panic!("At least 2 operands required");
-        }
-
-        // SPRDREC-1
-        if operands.len() == 2 && !operands[0].is_product() && !operands[1].is_product() {
-            // SPRDREC-1-1
-            let mut operands = {
-                let (operands, both_consts) = match (&operands[0], &operands[1]) {
-                    (Ast::Int(l), Ast::Int(r)) => (vec![Self::Int(l * r)], true),
-                    (Ast::Frc(l), Ast::Frc(r)) => (vec![Self::from_frac(l * r)], true),
-
-                    (Ast::Int(int), Ast::Frc(frc)) | (Ast::Frc(frc), Ast::Int(int)) => (
-                        vec![Self::from_frac(
-                            BigRational::from_integer(int.clone()) * frc,
-                        )],
-                        true,
-                    ),
-
-                    _ => (operands, false),
-                };
-
-                if both_consts {
-                    if operands.len() == 1 && operands[0].is_int_one() {
-                        return vec![];
-                    } else {
-                        return operands;
-                    }
-                }
-
-                operands
-            };
-
-            // SPRDREC-1-2
-            {
-                if operands[0].is_int_one() {
-                    return vec![operands.swap_remove(1)];
-                }
-
-                if operands[1].is_int_one() {
-                    return vec![operands.into_iter().next().unwrap()];
-                }
-            };
-
-            // SPRDREC-1-3
-            {
-                let (base_l, exp_l) = operands[0].as_power_operands();
-                let (base_r, exp_r) = operands[1].as_power_operands();
-
-                if base_l == base_r {
-                    let exp = Self::simplify_sum(vec![exp_l.into_owned(), exp_r.into_owned()]);
-                    let pow = Self::simplify_power(base_l.into_owned(), exp);
-
-                    if pow.is_int_one() {
-                        return vec![];
-                    } else {
-                        return vec![pow];
-                    }
-                }
-            };
-
-            // SPRDREC-1-4
-            {
-                if operands[1] < operands[0] {
-                    operands.reverse();
-                    return operands;
-                }
-            };
-
-            // SPRDREC-1-5
-            {
-                return operands;
-            };
-        }
-
-        // SPRDREC-2
-        if operands.len() == 2 && (operands[0].is_product() || !operands[1].is_product()) {
-            let mut iter = operands.into_iter();
-
-            let l = iter.next().unwrap();
-            let r = iter.next().unwrap();
-
-            return match (l, r) {
-                // SPRDREC-2-1
-                (Ast::Prd(l), Ast::Prd(r)) => Self::merge_products(l, r),
-                // SPRDREC-2-2
-                (Ast::Prd(l), r) => Self::merge_products(l, vec![r]),
-                // SPRDREC-2-3
-                (l, Ast::Prd(r)) => Self::merge_products(vec![l], r),
-                _ => panic!("At least one operand should be a product"),
-            };
-        }
-
-        // SPRDREC-3
-        let mut iter = operands.into_iter();
-        let first = iter.next().unwrap();
-        let remaining = Self::simplify_product_rec(iter.collect());
-
-        match first {
-            // SPRDREC-3-1
-            Ast::Prd(operands) => Self::merge_products(operands, remaining),
-            // SPRDREC-3-2
-            operand => Self::merge_products(vec![operand], remaining),
-        }
-    }
-
-    fn merge_products(p: Vec<Ast>, q: Vec<Ast>) -> Vec<Ast> {
-        if p.len() == 0 && q.len() == 0 {
-            return vec![int(1)];
-        }
-
-        // MPRD-1
-        if q.len() == 0 {
-            return p;
-        }
-
-        // MPRD-2
-        if p.len() == 0 {
-            return q;
-        }
-
-        // MPRD-3
-        {
-            let mut p_iter = p.clone().into_iter();
-            let p1 = p_iter.next().unwrap();
-            let remaining_p = p_iter.collect::<Vec<_>>();
-
-            let mut q_iter = q.clone().into_iter();
-            let q1 = q_iter.next().unwrap();
-            let remaining_q = q_iter.collect::<Vec<_>>();
-
-            let mut h = Self::simplify_product_rec(vec![p1.clone(), q1.clone()]);
-
-            // MPRD-3-1
-            if h.len() == 0 {
-                return Self::merge_products(remaining_p, remaining_q);
-            }
-
-            // MPRD-3-2
-            if h.len() == 1 {
-                let mut merged = Self::merge_products(remaining_p, remaining_q);
-                h.append(&mut merged);
-                return h;
-            }
-
-            if h.len() == 2 {
-                // MPRD-3-3
-                if h[0] == p1 && h[1] == q1 {
-                    return std::iter::once(p1)
-                        .chain(Self::merge_products(remaining_p, q).into_iter())
-                        .collect();
-                }
-
-                // MPRD-3-4
-                if h[0] == q1 && h[1] == p1 {
-                    return std::iter::once(q1)
-                        .chain(Self::merge_products(p, remaining_q))
-                        .into_iter()
-                        .collect();
-                }
-            }
-        }
-
-        panic!("Impossible branch");
-    }
-
-    fn as_power_operands(&self) -> (Cow<Ast>, Cow<Ast>) {
-        match self {
-            operand @ (Ast::Und
-            | Ast::Sym(_)
-            | Ast::Int(_)
-            | Ast::Frc(_)
-            | Ast::Neg(_)
-            | Ast::Fac(_)
-            | Ast::Sum(_)
-            | Ast::Prd(_)
-            | Ast::Dif(_, _)
-            | Ast::Quo(_, _)) => (Cow::Borrowed(operand), Cow::Owned(int(1))),
-            Ast::Pow(base, exp) => (Cow::Borrowed(base), Cow::Borrowed(exp)),
-        }
-    }
-
-    fn simplify_product(operands: Vec<Ast>) -> Self {
-        let mut operands = operands
-            .into_iter()
-            // Simplify each operand first
-            .map(|op| op.simplify())
-            // Apply the Basic Associative Transformation
-            // (flatten operands that are products)
-            .flat_map(|op| match op {
-                operand @ (Ast::Und
-                | Ast::Sym(_)
-                | Ast::Int(_)
-                | Ast::Frc(_)
-                | Ast::Fac(_)
-                | Ast::Sum(_)
-                | Ast::Pow(_, _)) => vec![operand].into_iter(),
-                Ast::Prd(operands) => operands.into_iter(),
-
-                operand @ (Ast::Neg(_) | Ast::Dif(_, _) | Ast::Quo(_, _)) => {
-                    panic!("Cannot simplify product operand {:?}", operand)
-                }
-            })
-            .collect::<Vec<Ast>>();
-
-        // Apply the Basic Commutative Transformation
-        // (reorder the operands to a standard form)
-        operands.sort();
-
-        // Apply the Basic Power Transformation
-        // (combine like operands or powers with like bases into
-        // single operands by summing their exponents)
-        let operands = {
-            let mut new_operands = Vec::new();
-            let mut ops_iter = operands.into_iter();
-            let (mut cur_base, mut total_exp) = match ops_iter.next().unwrap() {
-                operand @ (Ast::Und
-                | Ast::Sym(_)
-                | Ast::Int(_)
-                | Ast::Frc(_)
-                | Ast::Neg(_)
-                | Ast::Fac(_)
-                | Ast::Sum(_)
-                | Ast::Prd(_)
-                | Ast::Dif(_, _)
-                | Ast::Quo(_, _)) => (operand, int(1)),
-                Ast::Pow(base, exp) => (*base, *exp),
-            };
-
-            for operand in ops_iter {
-                let (base, exp) = match operand {
-                    operand @ (Ast::Und
-                    | Ast::Sym(_)
-                    | Ast::Int(_)
-                    | Ast::Frc(_)
-                    | Ast::Neg(_)
-                    | Ast::Fac(_)
-                    | Ast::Sum(_)
-                    | Ast::Prd(_)
-                    | Ast::Dif(_, _)
-                    | Ast::Quo(_, _)) => (operand, int(1)),
-                    Ast::Pow(base, exp) => (*base, *exp),
-                };
-
-                if base == cur_base {
-                    total_exp = sum(total_exp, exp);
-                } else {
-                    new_operands.push(pow(cur_base, total_exp));
-                    cur_base = base;
-                    total_exp = exp;
-                }
-            }
-
-            new_operands.push(pow(cur_base, total_exp));
-
-            new_operands = new_operands.into_iter().map(|op| op.simplify()).collect();
-
-            new_operands.sort();
-
-            new_operands
-        };
-
-        // Apply the Basic Numerical Transformation
-        // (multiply all constant factors into a single constant)
-        let mut operands = {
-            let mut const_total = BigRational::from_i32(1).unwrap();
-            let mut new_operands = Vec::new();
-            for operand in operands.into_iter() {
-                match operand {
-                    Ast::Int(int) => {
-                        const_total *= BigRational::from_integer(int);
-                    }
-                    Ast::Frc(frc) => {
-                        const_total *= frc;
-                    }
-                    operand => new_operands.push(operand),
-                }
-            }
-
-            new_operands.insert(0, Ast::from_frac(const_total));
-
-            new_operands
-        };
-
-        // Basic Undefined Transformation
-        // (if any operand is undefined, the entire product
-        // is undefined)
-        if operands.iter().any(|op| op.is_undefined()) {
-            return Ast::Und;
-        }
-
-        if operands.len() == 0 {
-            // Shouldn't happen, but a product with no factors
-            // (not even a 1) is equal to zero
-            return int(0);
-        }
-
-        // Basic Identity Transformation 3.21
-        // (if a product contains the factor 0, the
-        // whole thing equals 0)
-        if operands.first().unwrap().is_int_zero() {
-            return int(0);
-        }
-
-        // Basic Identity Tranformation 3.22
-        // (if a product contains the factor 1, we can
-        // remove that factor)
-        if operands.first().unwrap().is_int_one() {
-            operands.remove(0);
-        }
-
-        // Basic Unary Transformation
-        // (if product has only one factor, just
-        // return that factor)
-        if operands.len() == 1 {
-            return operands.into_iter().next().unwrap();
-        }
-
-        Ast::Prd(operands)
-    }
-
-    fn simplify_difference(l: Ast, r: Ast) -> Self {
-        todo!()
-    }
-
-    fn simplify_quotient(l: Ast, r: Ast) -> Self {
-        todo!()
-    }
-
-    fn simplify_power(base: Ast, exponent: Ast) -> Self {
-        todo!()
-    }
-
     pub fn is_undefined(&self) -> bool {
         match self {
             Ast::Und => true,
             _ => false,
         }
+    }
+
+    pub fn is_pos_int(&self) -> bool {
+        match self {
+            Ast::Int(int) => int.is_positive(),
+            _ => false,
+        }
+    }
+
+    pub fn is_pos_frc(&self) -> bool {
+        match self {
+            Ast::Frc(frc) => frc.is_positive(),
+            _ => false,
+        }
+    }
+
+    pub fn is_pos_const(&self) -> bool {
+        self.is_pos_int() || self.is_pos_frc()
     }
 
     pub fn is_int_zero(&self) -> bool {
@@ -489,9 +90,30 @@ impl Ast {
         }
     }
 
+    pub fn is_int(&self) -> bool {
+        match self {
+            Ast::Int(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_product(&self) -> bool {
         match self {
             Ast::Prd(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_sum(&self) -> bool {
+        match self {
+            Ast::Sum(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_const(&self) -> bool {
+        match self {
+            Ast::Int(_) | Ast::Frc(_) => true,
             _ => false,
         }
     }

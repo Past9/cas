@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod simplify;
 
 use std::str::FromStr;
 
