@@ -241,3 +241,38 @@ impl Ast {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::parse::ast::{ast_helpers::*, test_helpers::test_simplified_src};
+
+    #[test]
+    fn simplify_const_sum() {
+        test_simplified_src("1 + 2", int(3));
+        test_simplified_src("0.5 + 2", frc(5, 2));
+        test_simplified_src("0.5 + -2", frc(-3, 2));
+        test_simplified_src("-0.5 + 2", frc(3, 2));
+        test_simplified_src("1 + -1", int(0));
+        test_simplified_src("0.5 + -0.5", int(0));
+        test_simplified_src("1/2 + -1/2", int(0));
+    }
+
+    #[test]
+    fn simplify_symbol_sum() {
+        test_simplified_src("0.5 + x + 2", sum([frc(5, 2), sym("x")]));
+        test_simplified_src("0.5 + -x + 2", sum([frc(5, 2), prd([int(-1), sym("x")])]));
+        test_simplified_src("1 / x + 2 / x", prd([int(3), pow(sym("x"), int(-1))]));
+        test_simplified_src(
+            "1 / (2 * x) + 2 / x",
+            prd([frc(5, 2), pow(sym("x"), int(-1))]),
+        );
+    }
+
+    #[test]
+    fn adds_multiples() {
+        test_simplified_src("(2 * x) + (3 * x)", prd([int(5), sym("x")]));
+        test_simplified_src("(-2 * x) + (3 * x)", sym("x"));
+        test_simplified_src("(2 * x) + (2 * -x)", int(0));
+        test_simplified_src("(2 * x) + (3 * -x)", prd([int(-1), sym("x")]));
+    }
+}

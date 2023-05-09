@@ -79,7 +79,6 @@ impl Ast {
 
         // SINTPOW-5
         if let Self::Prd(factors) = base {
-            println!("SINTPOW5");
             return Self::Prd(
                 factors
                     .into_iter()

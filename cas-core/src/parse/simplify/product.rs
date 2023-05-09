@@ -257,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn adds_exponents() {
+    fn adds_powers() {
         test_simplified_src("x ^ 2 * x ^ 3", pow(sym("x"), int(5)));
         test_simplified_src("x ^ 3 * x ^ -2", sym("x"));
         test_simplified_src("x ^ 2 * x ^ -3", pow(sym("x"), int(-1)));
