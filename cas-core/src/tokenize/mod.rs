@@ -28,14 +28,12 @@ pub fn tokenize_src(src: &str) -> TokenizerResult {
 
 fn tokenizer() -> impl Parser<char, Vec<Spanned<Token>>, Error = SyntaxError<char>> {
     choice::<_, SyntaxError<char>>((
-        // Keywords
+        // Keywords and symbols
         choice((
             just("undefined").to(Undefined),
-            just("sin").to(Sin),
-            just("cos").to(Cos),
-        )),
-        // Operators
-        choice((
+            just(",").to(Comma),
+            just('(').to(OpenParen),
+            just(')').to(CloseParen),
             just('+').to(Plus),
             just('-').to(Minus),
             just('*').to(Asterisk),
@@ -43,8 +41,6 @@ fn tokenizer() -> impl Parser<char, Vec<Spanned<Token>>, Error = SyntaxError<cha
             just('^').to(Caret),
             just('!').to(Bang),
         )),
-        // Parens
-        choice((just('(').to(OpenParen), just(')').to(CloseParen))),
         text::ident().map(Ident),
         choice((
             // Number literal

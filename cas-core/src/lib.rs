@@ -3,9 +3,7 @@ use std::collections::BTreeMap;
 use parse::ast::Ast;
 
 mod error;
-//pub mod expr;
 mod parse;
-mod simplify;
 mod tokenize;
 
 pub type Span = std::ops::Range<usize>;

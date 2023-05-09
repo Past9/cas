@@ -16,7 +16,7 @@ use crate::{
     Spanned,
 };
 
-use self::ast::{ast_helpers::*, Ast, };
+use self::ast::{ast_helpers::*, Ast};
 
 #[derive(Debug, Clone)]
 pub struct ParserResult {
@@ -71,13 +71,30 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
         }
         .boxed();
 
+        let comma_list = expr
+            .clone()
+            .separated_by(just(Token::Comma))
+            .allow_trailing()
+            .boxed();
+
+        let function = select! {
+            Token::Ident(name) => name
+        }.then(comma_list.delimited_by(just(Token::OpenParen), just(Token::CloseParen)))
+        .map(|(name, args)| {
+            Ast::Fun(name.to_owned(), args.to_vec())
+        })
+        .boxed();
+
+
         let atom = keywords
+            .or(function)
             .or(symbol)
             .or(constant)
             .or(expr
                 .clone()
                 .delimited_by(just(Token::OpenParen), just(Token::CloseParen)))
             .boxed();
+
 
         let factorial = atom
             .then(just(Token::Bang).repeated())
@@ -104,9 +121,9 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
                     .then(exp)
                     .repeated(),
             )
-            .foldl(|left, (op, right)|  { 
+            .foldl(|left, (op, right)|  {
                 if op == Token::Asterisk {
-                    prd([left, right]) 
+                    prd([left, right])
                 } else if op == Token::FwdSlash {
                     quo(left, right)
                 } else {
@@ -141,7 +158,7 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::ast::ast_helpers::{sum, quo, pow, fac, frc, int, prd, neg, dif, sym, und};
+    use crate::parse::ast::ast_helpers::{dif, fac, frc, int, neg, pow, prd, quo, sum, sym, und};
 
     use super::*;
 
@@ -337,4 +354,16 @@ mod tests {
         )
     }
 
+    #[test]
+    fn function() {
+        assert_eq!(parse_src("f(x)").ast.unwrap(), fun("f", [sym("x")]));
+        assert_eq!(
+            parse_src("f(x, y)").ast.unwrap(),
+            fun("f", [sym("x"), sym("y")])
+        );
+        assert_eq!(
+            parse_src("f(x, g(y))").ast.unwrap(),
+            fun("f", [sym("x"), fun("g", [sym("y")])])
+        );
+    }
 }

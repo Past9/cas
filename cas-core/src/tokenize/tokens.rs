@@ -2,6 +2,7 @@
 pub enum Token {
     Const(String),
     Ident(String),
+    Comma,
     OpenParen,
     CloseParen,
     Plus,
@@ -11,6 +12,4 @@ pub enum Token {
     Caret,
     Bang,
     Undefined,
-    Sin,
-    Cos,
 }
