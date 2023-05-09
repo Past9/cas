@@ -30,6 +30,7 @@ impl Ast {
             | Ast::Prd(_)
             | Ast::Dif(_, _)
             | Ast::Quo(_, _)
+            | Ast::Fun(_, _)
             | Ast::Pow(_, _) => fac(operand),
         }
     }

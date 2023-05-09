@@ -223,6 +223,7 @@ impl Ast {
             | Ast::Sum(_)
             | Ast::Dif(_, _)
             | Ast::Quo(_, _)
+            | Ast::Fun(_, _)
             | Ast::Pow(_, _)) => (Cow::Borrowed(operand), Cow::Owned(int(1))),
             prd @ Ast::Prd(factors) => {
                 if factors.len() == 2 && factors[0].is_const() {

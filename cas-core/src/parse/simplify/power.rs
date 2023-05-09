@@ -98,7 +98,7 @@ mod tests {
     use crate::parse::ast::{ast_helpers::*, test_helpers::test_simplified_src};
 
     #[test]
-    fn simplifies_int_power() {
+    fn simplifies_int_pow() {
         test_simplified_src("2 ^ 3", int(8));
         test_simplified_src("-2 ^ 3", int(-8));
         test_simplified_src("-2 ^ 2", int(4));
@@ -129,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn multiplies_integer_exponents() {
+    fn multiplies_int_exp() {
         test_simplified_src("2 ^ 2 ^ 3", int(64));
         test_simplified_src("x ^ 2 ^ 3", pow(sym("x"), int(6)));
         test_simplified_src("x ^ 2 ^ -3", pow(sym("x"), int(-6)));
@@ -143,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn does_not_multiply_fractional_exponent_of_integer_exponent() {
+    fn does_not_multiply_frac_exp_of_int_exp() {
         // Does not become `x ^ 1` -> `x`
         test_simplified_src("x ^ 2 ^ 0.5", pow(pow(sym("x"), int(2)), frc(1, 2)));
     }

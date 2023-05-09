@@ -223,6 +223,7 @@ impl Ast {
             | Ast::Sum(_)
             | Ast::Prd(_)
             | Ast::Dif(_, _)
+            | Ast::Fun(_, _)
             | Ast::Quo(_, _)) => (Cow::Borrowed(operand), Cow::Owned(int(1))),
             Ast::Pow(base, exp) => (Cow::Borrowed(base), Cow::Borrowed(exp)),
         }
