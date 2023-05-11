@@ -113,31 +113,36 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
             .foldl(|left, (_op, right)| pow(left, right))
             .boxed();
 
-        let mul_div = exp
+        let mul = exp.clone()
+            .then(
+                just(Token::Asterisk).ignore_then(exp).repeated()
+            )
+            .map(|(first, remaining)| {
+                if remaining.len() == 0 {
+                    first
+                } else {
+                    Ast::Prd(std::iter::once(first).chain(remaining.into_iter()).collect())
+                }
+        });
+
+        let div = mul
             .clone()
             .then(
-                just(Token::Asterisk)
-                    .or(just(Token::FwdSlash))
-                    .then(exp)
+                just(Token::FwdSlash)
+                    .ignore_then(mul)
                     .repeated(),
             )
-            .foldl(|left, (op, right)|  {
-                if op == Token::Asterisk {
-                    prd([left, right])
-                } else if op == Token::FwdSlash {
-                    quo(left, right)
-                } else {
-                    panic!("Invalid operator at mul/div precedence level: {:?}", op)
-                }
+            .foldl(|left, right|  {
+                quo(left, right)
             })
             .boxed();
 
-        let add_sub = mul_div
+        let add_sub = div
             .clone()
             .then(
                 just(Token::Plus)
                     .or(just(Token::Minus))
-                    .then(mul_div)
+                    .then(div)
                     .repeated(),
             )
             .foldl(|left, (op, right)| {
@@ -263,7 +268,7 @@ mod tests {
     fn multiple_mul() {
         assert_eq!(
             parse_src("1 * 2 * 3").ast.unwrap(),
-            prd([prd([int(1), int(2)]), int(3)])
+            prd([int(1), int(2), int(3)])
         );
     }
 
@@ -292,7 +297,7 @@ mod tests {
     fn div_mul() {
         assert_eq!(
             parse_src("1 / 2 * 3").ast.unwrap(),
-            prd([quo(int(1), int(2)), int(3)])
+            quo(int(1), prd([int(2), int(3)])) //prd([quo(int(1), int(2)), int(3)])
         );
     }
 

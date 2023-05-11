@@ -2,7 +2,10 @@ use std::borrow::Cow;
 
 use num::BigRational;
 
-use crate::parse::ast::{ast_helpers::int, Ast};
+use crate::parse::ast::{
+    ast_helpers::{int, prd},
+    Ast,
+};
 
 impl Ast {
     pub(crate) fn simplify_product(operands: Vec<Ast>) -> Self {
@@ -27,6 +30,37 @@ impl Ast {
 
         // SPRD-4
         let operands = Self::simplify_product_rec(operands);
+
+        // Modification p. 108 ex. 8: distribute factor over sums
+        if operands.len() == 2 && operands[0].is_const() && operands[1].is_sum() {
+            println!("DISTRIBUTE");
+            let mut iter = operands.into_iter();
+
+            let constant = iter.next().unwrap();
+            let sum = iter.next().unwrap();
+
+            match (constant, sum) {
+                (constant @ (Ast::Int(..) | Ast::Frc(..)), Ast::Sum(operands)) => {
+                    return Ast::Sum(
+                        operands
+                            .into_iter()
+                            .map(|op| prd([constant.clone(), op]).simplify())
+                            .collect::<Vec<_>>(),
+                    );
+
+                    /*
+                    return Ast::Sum(
+                        operands
+                            .into_iter()
+                            .map(|op| prd([constant.clone(), op]).simplify())
+                            .collect(),
+                    )
+                    .simplify();
+                            */
+                }
+                _ => unreachable!(),
+            }
+        }
 
         // SPRD-4-3
         if operands.len() == 0 {
@@ -252,9 +286,35 @@ mod tests {
     }
 
     #[test]
-    fn does_not_distribute_factor() {
-        // Does not become `2 * x + 2 * y`
-        test_simplified_src("2 * (x + y)", prd([int(2), sum([sym("x"), sym("y")])]));
+    fn distributes_const_over_single_sum() {
+        // Becomes `6 + 2 * x`
+        test_simplified_src("2 * (3 + x)", sum([int(6), prd([int(2), sym("x")])]));
+
+        // Becomes `2 * x + 2 * y`
+        test_simplified_src(
+            "2 * (x + y)",
+            sum([prd([int(2), sym("x")]), prd([int(2), sym("y")])]),
+        );
+
+        // Becomes `-6 + 2 * x + 2 * y + 4 * z`
+        test_simplified_src(
+            "2 * (x + y - 3 + 2 * z)",
+            sum([
+                int(-6),
+                prd([int(2), sym("x")]),
+                prd([int(2), sym("y")]),
+                prd([int(4), sym("z")]),
+            ]),
+        );
+    }
+
+    #[test]
+    fn does_not_distribute_const_over_multiple_sums() {
+        // Remains unchanged
+        test_simplified_src(
+            "2 * (3 + x) * (4 + x)",
+            prd([int(2), sum([int(3), sym("x")]), sum([int(4), sym("x")])]),
+        );
     }
 
     #[test]
