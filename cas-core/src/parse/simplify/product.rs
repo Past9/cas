@@ -2,10 +2,7 @@ use std::borrow::Cow;
 
 use num::BigRational;
 
-use crate::parse::ast::{
-    ast_helpers::{int, prd},
-    Ast,
-};
+use crate::parse::ast::{ast_helpers::int, Ast};
 
 impl Ast {
     pub(crate) fn simplify_product(operands: Vec<Ast>) -> Self {
