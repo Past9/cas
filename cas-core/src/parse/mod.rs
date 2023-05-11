@@ -113,36 +113,32 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
             .foldl(|left, (_op, right)| pow(left, right))
             .boxed();
 
-        let mul = exp.clone()
-            .then(
-                just(Token::Asterisk).ignore_then(exp).repeated()
-            )
-            .map(|(first, remaining)| {
-                if remaining.len() == 0 {
-                    first
-                } else {
-                    Ast::Prd(std::iter::once(first).chain(remaining.into_iter()).collect())
-                }
-        });
 
-        let div = mul
+        let mul_div = exp
             .clone()
             .then(
-                just(Token::FwdSlash)
-                    .ignore_then(mul)
+                just(Token::Asterisk)
+                    .or(just(Token::FwdSlash))
+                    .then(exp)
                     .repeated(),
             )
-            .foldl(|left, right|  {
-                quo(left, right)
+            .foldl(|left, (op, right)|  {
+                if op == Token::Asterisk {
+                    prd([left, right])
+                } else if op == Token::FwdSlash {
+                    quo(left, right)
+                } else {
+                    panic!("Invalid operator at mul/div precedence level: {:?}", op)
+                }
             })
             .boxed();
 
-        let add_sub = div
+        let add_sub = mul_div
             .clone()
             .then(
                 just(Token::Plus)
                     .or(just(Token::Minus))
-                    .then(div)
+                    .then(mul_div)
                     .repeated(),
             )
             .foldl(|left, (op, right)| {
@@ -260,6 +256,20 @@ mod tests {
     }
 
     #[test]
+    fn add_sub_ltr() {
+        // Ensures addition and subtration are parsed left-to-right at the same precedence
+        // instead of prioritizing one over the other, which can give incorrect/unexpected results.
+        assert_eq!(
+            parse_src("2 + 3 - 4 + 5").ast.unwrap(),
+            sum([dif(sum([int(2), int(3)]), int(4)), int(5)])
+        );
+        assert_eq!(
+            parse_src("2 - 3 + 4 - 5").ast.unwrap(),
+            dif(sum([dif(int(2), int(3)), int(4)]), int(5))
+        );
+    }
+
+    #[test]
     fn single_mul() {
         assert_eq!(parse_src("1 * 2").ast.unwrap(), prd([int(1), int(2)]));
     }
@@ -268,7 +278,7 @@ mod tests {
     fn multiple_mul() {
         assert_eq!(
             parse_src("1 * 2 * 3").ast.unwrap(),
-            prd([int(1), int(2), int(3)])
+            prd([prd([int(1), int(2)]), int(3)])
         );
     }
 
@@ -297,7 +307,21 @@ mod tests {
     fn div_mul() {
         assert_eq!(
             parse_src("1 / 2 * 3").ast.unwrap(),
-            quo(int(1), prd([int(2), int(3)])) //prd([quo(int(1), int(2)), int(3)])
+            prd([quo(int(1), int(2)), int(3)])
+        );
+    }
+
+    #[test]
+    fn div_mul_ltr() {
+        // Ensures multiplication and division are parsed left-to-right at the same precedence
+        // instead of prioritizing one over the other, which can give incorrect/unexpected results.
+        assert_eq!(
+            parse_src("2 * 3 / 4 * 5").ast.unwrap(),
+            prd([quo(prd([int(2), int(3)]), int(4)), int(5)])
+        );
+        assert_eq!(
+            parse_src("2 / 3 * 4 / 5").ast.unwrap(),
+            quo(prd([quo(int(2), int(3)), int(4)]), int(5))
         );
     }
 

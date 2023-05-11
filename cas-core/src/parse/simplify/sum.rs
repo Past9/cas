@@ -276,4 +276,12 @@ mod tests {
         test_simplified_src("(2 * x) + (2 * -x)", int(0));
         test_simplified_src("(2 * x) + (3 * -x)", prd([int(-1), sym("x")]));
     }
+
+    #[test]
+    fn add_sub_ltr() {
+        // Ensures addition and subtration are parsed left-to-right at the same precedence
+        // instead of prioritizing one over the other, which can give incorrect/unexpected results.
+        test_simplified_src("2 + 3 - 4 + 5", int(6));
+        test_simplified_src("2 - 3 + 4 - 5", int(-2));
+    }
 }

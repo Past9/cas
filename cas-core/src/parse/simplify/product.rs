@@ -31,37 +31,6 @@ impl Ast {
         // SPRD-4
         let operands = Self::simplify_product_rec(operands);
 
-        // Modification p. 108 ex. 8: distribute factor over sums
-        if operands.len() == 2 && operands[0].is_const() && operands[1].is_sum() {
-            println!("DISTRIBUTE");
-            let mut iter = operands.into_iter();
-
-            let constant = iter.next().unwrap();
-            let sum = iter.next().unwrap();
-
-            match (constant, sum) {
-                (constant @ (Ast::Int(..) | Ast::Frc(..)), Ast::Sum(operands)) => {
-                    return Ast::Sum(
-                        operands
-                            .into_iter()
-                            .map(|op| prd([constant.clone(), op]).simplify())
-                            .collect::<Vec<_>>(),
-                    );
-
-                    /*
-                    return Ast::Sum(
-                        operands
-                            .into_iter()
-                            .map(|op| prd([constant.clone(), op]).simplify())
-                            .collect(),
-                    )
-                    .simplify();
-                            */
-                }
-                _ => unreachable!(),
-            }
-        }
-
         // SPRD-4-3
         if operands.len() == 0 {
             return int(1);
@@ -286,34 +255,39 @@ mod tests {
     }
 
     #[test]
-    fn distributes_const_over_single_sum() {
-        // Becomes `6 + 2 * x`
-        test_simplified_src("2 * (3 + x)", sum([int(6), prd([int(2), sym("x")])]));
-
-        // Becomes `2 * x + 2 * y`
-        test_simplified_src(
-            "2 * (x + y)",
-            sum([prd([int(2), sym("x")]), prd([int(2), sym("y")])]),
-        );
-
-        // Becomes `-6 + 2 * x + 2 * y + 4 * z`
+    fn does_not_distribute_const_over_sum() {
+        test_simplified_src("2 * (3 + x)", prd([int(2), sum([int(3), sym("x")])]));
+        test_simplified_src("2 * (x + y)", prd([int(2), sum([sym("x"), sym("y")])]));
         test_simplified_src(
             "2 * (x + y - 3 + 2 * z)",
-            sum([
-                int(-6),
-                prd([int(2), sym("x")]),
-                prd([int(2), sym("y")]),
-                prd([int(4), sym("z")]),
+            prd([
+                int(2),
+                sum([int(-3), sym("x"), sym("y"), prd([int(2), sym("z")])]),
             ]),
         );
-    }
-
-    #[test]
-    fn does_not_distribute_const_over_multiple_sums() {
-        // Remains unchanged
         test_simplified_src(
             "2 * (3 + x) * (4 + x)",
             prd([int(2), sum([int(3), sym("x")]), sum([int(4), sym("x")])]),
+        );
+
+        test_simplified_src(
+            "2 * (3 + x) * (4 + x) * (5 + x)",
+            prd([
+                int(2),
+                sum([int(3), sym("x")]),
+                sum([int(4), sym("x")]),
+                sum([int(5), sym("x")]),
+            ]),
+        );
+
+        test_simplified_src(
+            "2 * (3 + x) * (4 + x) * (5 + x)",
+            prd([
+                int(2),
+                sum([int(3), sym("x")]),
+                sum([int(4), sym("x")]),
+                sum([int(5), sym("x")]),
+            ]),
         );
     }
 
@@ -323,5 +297,13 @@ mod tests {
         test_simplified_src("x ^ 3 * x ^ -2", sym("x"));
         test_simplified_src("x ^ 2 * x ^ -3", pow(sym("x"), int(-1)));
         test_simplified_src("x ^ 3 * x ^ -3", int(1));
+    }
+
+    #[test]
+    fn div_mul_ltr() {
+        // Ensures multiplication and division are parsed left-to-right at the same precedence
+        // instead of prioritizing one over the other, which can give incorrect/unexpected results.
+        test_simplified_src("2 * 3 / 4 * 5", frc(15, 2));
+        test_simplified_src("2 / 3 * 4 / 5", frc(8, 15));
     }
 }

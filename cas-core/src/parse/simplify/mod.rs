@@ -1,6 +1,9 @@
 use std::{borrow::Borrow, cmp::Ordering};
 
-use super::ast::{ast_helpers::int, Ast};
+use super::ast::{
+    ast_helpers::{dif, fac, int, neg, pow, quo},
+    Ast,
+};
 
 pub(super) mod difference;
 pub(super) mod factorial;
