@@ -1,8 +1,7 @@
+use num::BigRational;
 use std::borrow::Cow;
 
-use num::BigRational;
-
-use crate::parse::ast::{ast_helpers::int, Ast};
+use crate::ast::{helpers::int, Ast};
 
 impl Ast {
     pub(crate) fn simplify_product(operands: Vec<Ast>) -> Self {
@@ -232,7 +231,7 @@ impl Ast {
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::ast::{ast_helpers::*, test_helpers::test_simplified_src};
+    use crate::{ast::helpers::*, helpers::test_simplified_src};
 
     #[test]
     fn simplify_const_mul() {

@@ -1,8 +1,6 @@
-use crate::parse::ast::{
-    ast_helpers::{int, pow, prd},
-    Ast,
-};
 use num::{traits::Pow, BigInt, BigRational, One, Signed, Zero};
+
+use crate::ast::{helpers::*, Ast};
 
 impl Ast {
     pub(crate) fn simplify_power(base: Self, exponent: Self) -> Self {
@@ -95,7 +93,7 @@ impl Ast {
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::ast::{ast_helpers::*, test_helpers::test_simplified_src};
+    use crate::{ast::helpers::*, helpers::test_simplified_src};
 
     #[test]
     fn simplifies_int_pow() {

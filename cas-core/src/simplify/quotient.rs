@@ -1,7 +1,4 @@
-use crate::parse::ast::{
-    ast_helpers::{int, pow, prd},
-    Ast,
-};
+use crate::ast::{helpers::*, Ast};
 
 impl Ast {
     pub(crate) fn simplify_quotient(l: Self, r: Self) -> Self {
@@ -11,7 +8,7 @@ impl Ast {
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::ast::{ast_helpers::*, test_helpers::test_simplified_src};
+    use crate::{ast::helpers::*, helpers::test_simplified_src};
 
     #[test]
     fn simplify_const_div() {

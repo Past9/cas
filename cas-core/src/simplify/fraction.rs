@@ -1,6 +1,5 @@
+use crate::ast::Ast;
 use num::BigRational;
-
-use crate::parse::ast::Ast;
 
 impl Ast {
     pub(crate) fn simplify_fraction(frc: BigRational) -> Self {
@@ -10,7 +9,7 @@ impl Ast {
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::ast::{ast_helpers::*, test_helpers::test_simplified_src};
+    use crate::{ast::helpers::*, helpers::test_simplified_src};
 
     #[test]
     fn simplifies_fraction() {

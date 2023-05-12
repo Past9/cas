@@ -1,9 +1,6 @@
 use num::{bigint::ToBigInt, BigUint, Signed, Zero};
 
-use crate::parse::ast::{
-    ast_helpers::{fac, int},
-    Ast,
-};
+use crate::ast::{helpers::*, Ast};
 
 impl Ast {
     pub(crate) fn simplify_factorial(operand: Self) -> Self {
@@ -46,7 +43,7 @@ fn int_factorial(uint: BigUint) -> BigUint {
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::ast::{ast_helpers::*, test_helpers::test_simplified_src};
+    use crate::{ast::helpers::*, helpers::test_simplified_src};
 
     #[test]
     fn simplify_pos_int_fac() {

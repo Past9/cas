@@ -1,10 +1,13 @@
+mod ast;
 mod error;
+mod helpers;
 mod parse;
 mod simplify;
 mod tokenize;
 
-use parse::ast::Ast;
 use std::collections::BTreeMap;
+
+use ast::Ast;
 
 pub type Span = std::ops::Range<usize>;
 

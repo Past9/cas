@@ -1,9 +1,6 @@
 use std::ops::Neg;
 
-use crate::parse::ast::{
-    ast_helpers::{int, prd},
-    Ast,
-};
+use crate::ast::{helpers::*, Ast};
 
 impl Ast {
     pub(crate) fn simplify_negation(operand: Self) -> Self {

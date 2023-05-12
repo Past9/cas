@@ -1,6 +1,6 @@
 use std::{borrow::Borrow, cmp::Ordering};
 
-use crate::parse::ast::{ast_helpers::int, Ast};
+use crate::ast::{helpers::int, Ast};
 
 pub(super) mod difference;
 pub(super) mod factorial;

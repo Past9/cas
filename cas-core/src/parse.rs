@@ -1,7 +1,7 @@
 pub mod ast;
 
-use self::ast::{ast_helpers::*, Ast};
 use crate::{
+    ast::{helpers::*, Ast},
     error::SyntaxError,
     tokenize::{tokenize_src, tokens::Token},
     Spanned,
@@ -155,8 +155,6 @@ fn parser() -> impl Parser<Token, Ast, Error = SyntaxError<Token>> + Clone {
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::ast::ast_helpers::{dif, fac, frc, int, neg, pow, prd, quo, sum, sym, und};
-
     use super::*;
 
     #[test]
