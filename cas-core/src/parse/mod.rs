@@ -1,22 +1,18 @@
 pub mod ast;
-pub mod simplify;
 
-use std::str::FromStr;
-
+use self::ast::{ast_helpers::*, Ast};
+use crate::{
+    error::SyntaxError,
+    tokenize::{tokenize_src, tokens::Token},
+    Spanned,
+};
 use chumsky::{
     primitive::{end, just},
     recursive::recursive,
     select, Parser, Stream,
 };
 use rust_decimal::Decimal;
-
-use crate::{
-    error::SyntaxError,
-    tokenize::{tokenize_src, tokens::Token},
-    Spanned,
-};
-
-use self::ast::{ast_helpers::*, Ast};
+use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub struct ParserResult {
