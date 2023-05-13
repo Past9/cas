@@ -1,5 +1,3 @@
-pub mod ast;
-
 use crate::{
     ast::{helpers::*, Ast},
     error::SyntaxError,

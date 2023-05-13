@@ -2,6 +2,7 @@ mod ast;
 mod error;
 mod helpers;
 mod parse;
+mod polynomial;
 mod simplify;
 mod tokenize;
 

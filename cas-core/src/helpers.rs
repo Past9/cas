@@ -91,31 +91,31 @@ impl Ast {
     }
 
     pub fn has(&self, ast: &Ast) -> bool {
-        if self == ast {
-            true
-        } else {
-            match self {
-                Ast::Neg(operand) => operand.has(ast),
-                Ast::Fac(operand) => operand.has(ast),
-                Ast::Sum(operands) => operands.iter().any(|op| op.has(ast)),
-                Ast::Prd(operands) => operands.iter().any(|op| op.has(ast)),
-                Ast::Dif(l, r) => l.has(ast) || r.has(ast),
-                Ast::Quo(l, r) => l.has(ast) || r.has(ast),
-                Ast::Pow(base, exp) => base.has(ast) || exp.has(ast),
-                Ast::Fun(_, args) => args.iter().any(|op| op.has(ast)),
-
-                Ast::Und | Ast::Sym(_) | Ast::Int(_) | Ast::Frc(_) => false,
-            }
-        }
+        !self.is_free_of(ast)
     }
 
     pub fn is_free_of(&self, ast: &Ast) -> bool {
-        !self.has(ast)
+        if self == ast {
+            return false;
+        } else {
+            match self {
+                Ast::Und | Ast::Sym(_) | Ast::Int(_) | Ast::Frc(_) => true,
+
+                Ast::Neg(operand) => operand.is_free_of(ast),
+                Ast::Fac(operand) => operand.is_free_of(ast),
+                Ast::Sum(operands) => operands.iter().all(|op| op.is_free_of(ast)),
+                Ast::Prd(operands) => operands.iter().all(|op| op.is_free_of(ast)),
+                Ast::Dif(l, r) => l.is_free_of(ast) && r.is_free_of(ast),
+                Ast::Quo(l, r) => l.is_free_of(ast) && r.is_free_of(ast),
+                Ast::Pow(base, exp) => base.is_free_of(ast) && exp.is_free_of(ast),
+                Ast::Fun(_, args) => args.iter().all(|op| op.is_free_of(ast)),
+            }
+        }
     }
 }
 
 #[cfg(test)]
-fn expect_ast(src: &str) -> Ast {
+pub fn expect_ast(src: &str) -> Ast {
     let result = crate::parse::parse_src(src);
     result.ast.unwrap()
 }
