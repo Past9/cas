@@ -1,4 +1,9 @@
-use std::collections::{BTreeSet, HashSet};
+use std::{
+    collections::{BTreeSet, HashSet},
+    fmt::Debug,
+};
+
+use num::BigInt;
 
 use crate::ast::{helpers::int, Ast};
 
@@ -70,6 +75,34 @@ impl Ast {
         variables.iter().all(|var| self.is_free_of(var))
     }
 
+    pub fn monomial_degree_gpe(&self, variables: &[Ast]) -> Ast {
+        if variables.contains(self) {
+            return int(1);
+        } else if let Ast::Pow(base, exp) = self {
+            if variables.contains(base) && exp.is_int() && **exp > int(1) {
+                return (**exp).clone();
+            }
+        } else if let Ast::Prd(operands) = self {
+            let mut degree: BigInt = 0.into();
+            for operand in operands.iter() {
+                match operand.monomial_degree_gpe(variables) {
+                    Ast::Int(deg) => degree += deg,
+                    _ => {
+                        return Ast::Und;
+                    }
+                }
+            }
+
+            return Ast::Int(degree);
+        }
+
+        if variables.iter().all(|var| self.is_free_of(var)) {
+            return int(0);
+        } else {
+            return Ast::Und;
+        }
+    }
+
     pub fn is_polynomial_gpe(&self, variables: &[Ast]) -> bool {
         if !self.is_sum() {
             self.is_monomial_gpe(variables)
@@ -79,20 +112,37 @@ impl Ast {
             }
 
             match self {
-                Ast::Und => false,
-                sym @ Ast::Sym(_) => sym.is_monomial_gpe(variables),
-                int @ Ast::Int(_) => int.is_monomial_gpe(variables),
-                frc @ Ast::Frc(_) => frc.is_monomial_gpe(variables),
-                Ast::Neg(op) => op.is_monomial_gpe(variables),
-                Ast::Fac(op) => op.is_monomial_gpe(variables),
-                Ast::Prd(ops) => ops.iter().all(|op| op.is_monomial_gpe(variables)),
-                Ast::Dif(l, r) => l.is_monomial_gpe(variables) && r.is_monomial_gpe(variables),
                 Ast::Sum(ops) => ops.iter().all(|op| op.is_monomial_gpe(variables)),
-                Ast::Quo(l, r) => l.is_monomial_gpe(variables) && r.is_monomial_gpe(variables),
-                Ast::Pow(base, exp) => {
-                    base.is_monomial_gpe(variables) && exp.is_monomial_gpe(variables)
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    pub fn polynomial_degree_gpe(&self, variables: &[Ast]) -> Ast {
+        if !self.is_sum() {
+            self.monomial_degree_gpe(variables)
+        } else {
+            if variables.contains(self) {
+                return int(1);
+            }
+
+            match self {
+                Ast::Sum(ops) => {
+                    let mut max: BigInt = 0.into();
+                    for op in ops.iter() {
+                        let deg = op.monomial_degree_gpe(variables);
+                        if let Ast::Int(deg) = deg {
+                            if deg > max {
+                                max = deg;
+                            }
+                        } else {
+                            return Ast::Und;
+                        }
+                    }
+
+                    Ast::Int(max)
                 }
-                Ast::Fun(_, args) => args.iter().all(|arg| arg.is_monomial_gpe(variables)),
+                _ => unreachable!(),
             }
         }
     }
@@ -117,6 +167,14 @@ mod tests {
         assert!(!expect_ast("x / y")
             .simplify()
             .is_monomial_gpe(&[sym("x"), sym("y")]));
+
+        assert!(expect_ast("(a + b)")
+            .simplify()
+            .is_monomial_gpe(&[sum([sym("a"), sym("b")])]));
+
+        assert!(expect_ast("(a + b) ^ 2")
+            .simplify()
+            .is_monomial_gpe(&[sum([sym("a"), sym("b")])]));
     }
 
     #[test]
@@ -136,6 +194,14 @@ mod tests {
         assert!(!expect_ast("(x + 1) * (x + 3)")
             .simplify()
             .is_polynomial_gpe(&[sym("x")]));
+
+        assert!(expect_ast("a + b")
+            .simplify()
+            .is_polynomial_gpe(&[sum([sym("a"), sym("b")])]));
+
+        assert!(expect_ast("(a + b) ^ 2")
+            .simplify()
+            .is_polynomial_gpe(&[sum([sym("a"), sym("b")])]));
     }
 
     #[test]
@@ -178,6 +244,47 @@ mod tests {
                 pow(int(3), frc(1, 2)),
                 pow(int(5), frc(1, 2)),
             ])
+        );
+    }
+
+    #[test]
+    fn gets_monomial_degree() {
+        assert_eq!(
+            expect_ast("3 * w * x^2 * y^3 * z^4")
+                .simplify()
+                .monomial_degree_gpe(&[sym("x"), sym("z")]),
+            int(6)
+        );
+    }
+
+    #[test]
+    fn gets_polynomial_degree() {
+        assert_eq!(
+            expect_ast("3 * w * x^2 * y^3 * z^4")
+                .simplify()
+                .polynomial_degree_gpe(&[sym("x"), sym("z")]),
+            int(6)
+        );
+
+        assert_eq!(
+            expect_ast("a * x^2 + b * x + c")
+                .simplify()
+                .polynomial_degree_gpe(&[sym("x")]),
+            int(2)
+        );
+
+        assert_eq!(
+            expect_ast("a * sin(x)^2 + b * sin(x) + c")
+                .simplify()
+                .polynomial_degree_gpe(&[fun("sin", [sym("x")])]),
+            int(2)
+        );
+
+        assert_eq!(
+            expect_ast("2 * x^2 * y * z^3 + w * x * z^6")
+                .simplify()
+                .polynomial_degree_gpe(&[sym("x"), sym("z")]),
+            int(7)
         );
     }
 }
