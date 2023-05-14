@@ -1,6 +1,23 @@
-use crate::ast::{helpers::int, Ast};
-use num::BigInt;
+use crate::ast::{
+    helpers::{int, pow, quo, sum},
+    Ast,
+};
+
+use num::{bigint::ToBigInt, BigInt, BigUint, Zero};
 use std::collections::BTreeSet;
+
+pub struct GpeCoefficient {
+    pub coefficient: Ast,
+    pub degree: BigUint,
+}
+impl GpeCoefficient {
+    pub fn new(coefficient: Ast, degree: BigUint) -> Self {
+        Self {
+            coefficient,
+            degree,
+        }
+    }
+}
 
 impl Ast {
     /// Returns all the general variable expressions for which `self` is a
@@ -149,6 +166,84 @@ impl Ast {
                 }
                 _ => unreachable!(),
             }
+        }
+    }
+
+    pub fn coefficient_monomial_gpe(&self, variable: &Ast) -> Option<GpeCoefficient> {
+        if self == variable {
+            return Some(GpeCoefficient::new(int(1), 1u32.into()));
+        } else if let Ast::Pow(base, exp) = self {
+            if &**base == variable && exp.is_int() && **exp > int(1) {
+                return Some(GpeCoefficient::new(int(1), exp.expect_uint()));
+            }
+        } else if let Ast::Prd(operands) = self {
+            let mut out_degree: BigUint = 0u32.into();
+            let mut out_coefficient = self.clone();
+            for operand in operands.iter() {
+                let gpe_coefficient = operand.coefficient_monomial_gpe(variable);
+                if let Some(GpeCoefficient { degree, .. }) = gpe_coefficient {
+                    if !degree.is_zero() {
+                        out_degree = degree;
+                        out_coefficient = quo(
+                            self.clone(),
+                            pow(variable.clone(), Ast::Int(out_degree.to_bigint().unwrap())),
+                        )
+                        .simplify();
+                    }
+                } else {
+                    return None;
+                }
+            }
+
+            return Some(GpeCoefficient::new(out_coefficient, out_degree));
+        }
+
+        if self.is_free_of(&variable) {
+            return Some(GpeCoefficient::new(self.clone(), 0u32.into()));
+        } else {
+            return None;
+        }
+    }
+
+    pub fn coefficient_gpe(&self, variable: &Ast, monomial_index: BigUint) -> Ast {
+        if self.is_sum() {
+            let mono_co = self.coefficient_monomial_gpe(variable);
+            match mono_co {
+                Some(co) => {
+                    if monomial_index == co.degree {
+                        return co.coefficient;
+                    } else {
+                        return int(0);
+                    }
+                }
+                None => {
+                    return Ast::Und;
+                }
+            }
+        } else {
+            if self == variable {
+                if monomial_index == 1u32.into() {
+                    return int(1);
+                } else {
+                    return int(0);
+                }
+            }
+
+            let mut co = int(0);
+            for operand in self.iter_operands() {
+                match operand.coefficient_monomial_gpe(variable) {
+                    Some(gpe_co) => {
+                        if gpe_co.degree == monomial_index {
+                            co = sum([co, gpe_co.coefficient]).simplify();
+                        }
+                    }
+                    None => {
+                        return Ast::Und;
+                    }
+                }
+            }
+
+            return co;
         }
     }
 }
@@ -306,6 +401,16 @@ mod tests {
         assert_eq!(
             ast.degree_gpe(&vars.into_iter().collect::<Vec<_>>()),
             int(3)
+        );
+    }
+
+    #[test]
+    fn gets_coefficient_gpe() {
+        assert_eq!(
+            expect_ast("a * x^2 + b * x + c")
+                .simplify()
+                .coefficient_gpe(&sym("x"), 2u32.into()),
+            sym("a")
         );
     }
 }

@@ -1,4 +1,4 @@
-use num::{BigInt, BigRational, One, Signed, Zero};
+use num::{bigint::ToBigInt, BigInt, BigRational, BigUint, One, Signed, Zero};
 use rust_decimal::Decimal;
 
 use crate::ast::Ast;
@@ -90,6 +90,27 @@ impl Ast {
         }
     }
 
+    pub fn expect_int(&self) -> BigInt {
+        if let Self::Int(int) = self {
+            int.clone()
+        } else {
+            panic!("Not an integer");
+        }
+    }
+
+    pub fn expect_uint(&self) -> BigUint {
+        let int = self.expect_int();
+        if !int.is_negative() {
+            int.to_biguint().unwrap()
+        } else {
+            panic!("Integer is negative");
+        }
+    }
+
+    pub fn iter_operands(&self) -> OperandIterator {
+        OperandIterator::new(self)
+    }
+
     pub fn has(&self, ast: &Ast) -> bool {
         !self.is_free_of(ast)
     }
@@ -111,6 +132,55 @@ impl Ast {
                 Ast::Fun(_, args) => args.iter().all(|op| op.is_free_of(ast)),
             }
         }
+    }
+}
+
+pub struct OperandIterator<'a> {
+    ast: &'a Ast,
+    index: usize,
+}
+impl<'a> OperandIterator<'a> {
+    fn new(ast: &'a Ast) -> Self {
+        Self { ast, index: 0 }
+    }
+}
+impl<'a> Iterator for OperandIterator<'a> {
+    type Item = &'a Ast;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let item: Option<Self::Item> = match self.ast {
+            Ast::Und => None,
+            Ast::Sym(_) => None,
+            Ast::Int(_) => None,
+            Ast::Frc(_) => None,
+            Ast::Neg(op) | Ast::Fac(op) => {
+                if self.index == 0 {
+                    Some(op)
+                } else {
+                    None
+                }
+            }
+            Ast::Sum(ops) | Ast::Prd(ops) | Ast::Fun(_, ops) => {
+                if self.index < ops.len() {
+                    Some(&ops[self.index])
+                } else {
+                    None
+                }
+            }
+            Ast::Dif(l, r) | Ast::Quo(l, r) | Ast::Pow(l, r) => {
+                if self.index == 0 {
+                    Some(l)
+                } else if self.index == 1 {
+                    Some(r)
+                } else {
+                    None
+                }
+            }
+        };
+
+        self.index += 1;
+
+        item
     }
 }
 
