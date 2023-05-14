@@ -199,14 +199,14 @@ impl Ast {
         }
 
         if self.is_free_of(&variable) {
-            return Some(GpeCoefficient::new(self.clone(), 0u32.into()));
+            Some(GpeCoefficient::new(self.clone(), 0u32.into()))
         } else {
-            return None;
+            None
         }
     }
 
     pub fn coefficient_gpe(&self, variable: &Ast, monomial_index: BigUint) -> Ast {
-        if self.is_sum() {
+        if !self.is_sum() {
             let mono_co = self.coefficient_monomial_gpe(variable);
             match mono_co {
                 Some(co) => {
@@ -243,7 +243,7 @@ impl Ast {
                 }
             }
 
-            return co;
+            co
         }
     }
 }
@@ -411,6 +411,28 @@ mod tests {
                 .simplify()
                 .coefficient_gpe(&sym("x"), 2u32.into()),
             sym("a")
+        );
+
+        assert_eq!(
+            expect_ast("3 * x * y^2 + 5 * x^2 * y + 7 * x + 9")
+                .simplify()
+                .coefficient_gpe(&sym("x"), 1u32.into()),
+            // 3 * y^2 + 7
+            sum([int(7), prd([int(3), pow(sym("y"), int(2))])])
+        );
+
+        assert_eq!(
+            expect_ast("3 * x * y^2 + 5 * x^2 * y + 7 * x + 9")
+                .simplify()
+                .coefficient_gpe(&sym("x"), 3u32.into()),
+            int(0)
+        );
+
+        assert_eq!(
+            expect_ast("(3 * sin(x)) * x^2 + (2 * ln(x)) * x + 4")
+                .simplify()
+                .coefficient_gpe(&sym("x"), 2u32.into()),
+            und()
         );
     }
 }
