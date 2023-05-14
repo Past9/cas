@@ -106,7 +106,7 @@ impl Ast {
 
     /// Returns whether `self` is a generalized polynomial expression in
     /// `variables`.
-    pub fn is_polynomial_gpe(&self, variables: &[Ast]) -> bool {
+    pub fn is_gpe(&self, variables: &[Ast]) -> bool {
         if !self.is_sum() {
             self.is_monomial_gpe(variables)
         } else {
@@ -123,7 +123,7 @@ impl Ast {
 
     /// Returns the degree of the generalized polynomial expression in `variables`.
     /// If `self` is not a polynomial in `variables`, returns `Ast::Und`.
-    pub fn polynomial_degree_gpe(&self, variables: &[Ast]) -> Ast {
+    pub fn degree_gpe(&self, variables: &[Ast]) -> Ast {
         if !self.is_sum() {
             self.monomial_degree_gpe(variables)
         } else {
@@ -150,15 +150,6 @@ impl Ast {
                 _ => unreachable!(),
             }
         }
-    }
-
-    /// Returns the degree of the generalized polynomial expression in `variables`.
-    /// If `self` is not a polynomial in `variables`, returns `Ast::Und`.
-    ///
-    /// This is an alias of `polynomial_degree_gpe` , which works for monomials as
-    /// well as polynomials.
-    pub fn degree_gpe(&self, variables: &[Ast]) -> Ast {
-        self.polynomial_degree_gpe(variables)
     }
 }
 
@@ -195,27 +186,27 @@ mod tests {
     fn identifies_polynomial_gpe() {
         assert!(expect_ast("x ^ 2 + y ^ 2")
             .simplify()
-            .is_polynomial_gpe(&[sym("x"), sym("y")]));
+            .is_gpe(&[sym("x"), sym("y")]));
 
         assert!(expect_ast("sin(x) ^ 2 + 2 * sin(x) + 3")
             .simplify()
-            .is_polynomial_gpe(&[fun("sin", [sym("x")])]));
+            .is_gpe(&[fun("sin", [sym("x")])]));
 
         assert!(!expect_ast("(x / y) + (2 * y)")
             .simplify()
-            .is_polynomial_gpe(&[sym("x"), sym("y")]));
+            .is_gpe(&[sym("x"), sym("y")]));
 
         assert!(!expect_ast("(x + 1) * (x + 3)")
             .simplify()
-            .is_polynomial_gpe(&[sym("x")]));
+            .is_gpe(&[sym("x")]));
 
         assert!(expect_ast("a + b")
             .simplify()
-            .is_polynomial_gpe(&[sum([sym("a"), sym("b")])]));
+            .is_gpe(&[sum([sym("a"), sym("b")])]));
 
         assert!(expect_ast("(a + b) ^ 2")
             .simplify()
-            .is_polynomial_gpe(&[sum([sym("a"), sym("b")])]));
+            .is_gpe(&[sum([sym("a"), sym("b")])]));
     }
 
     #[test]
@@ -276,28 +267,28 @@ mod tests {
         assert_eq!(
             expect_ast("3 * w * x^2 * y^3 * z^4")
                 .simplify()
-                .polynomial_degree_gpe(&[sym("x"), sym("z")]),
+                .degree_gpe(&[sym("x"), sym("z")]),
             int(6)
         );
 
         assert_eq!(
             expect_ast("a * x^2 + b * x + c")
                 .simplify()
-                .polynomial_degree_gpe(&[sym("x")]),
+                .degree_gpe(&[sym("x")]),
             int(2)
         );
 
         assert_eq!(
             expect_ast("a * sin(x)^2 + b * sin(x) + c")
                 .simplify()
-                .polynomial_degree_gpe(&[fun("sin", [sym("x")])]),
+                .degree_gpe(&[fun("sin", [sym("x")])]),
             int(2)
         );
 
         assert_eq!(
             expect_ast("2 * x^2 * y * z^3 + w * x * z^6")
                 .simplify()
-                .polynomial_degree_gpe(&[sym("x"), sym("z")]),
+                .degree_gpe(&[sym("x"), sym("z")]),
             int(7)
         );
     }
@@ -313,7 +304,7 @@ mod tests {
         );
 
         assert_eq!(
-            ast.polynomial_degree_gpe(&vars.into_iter().collect::<Vec<_>>()),
+            ast.degree_gpe(&vars.into_iter().collect::<Vec<_>>()),
             int(3)
         );
     }
