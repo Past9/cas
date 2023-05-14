@@ -1,13 +1,10 @@
-use std::{
-    collections::{BTreeSet, HashSet},
-    fmt::Debug,
-};
-
-use num::BigInt;
-
 use crate::ast::{helpers::int, Ast};
+use num::BigInt;
+use std::collections::BTreeSet;
 
 impl Ast {
+    /// Returns all the general variable expressions for which `self` is a
+    /// generalized polynomial expression.
     pub fn variables(&self) -> BTreeSet<Ast> {
         match self {
             // VAR-1
@@ -57,6 +54,8 @@ impl Ast {
         }
     }
 
+    /// Returns whether `self` is a generalized monomial expression in
+    /// `variables`.
     pub fn is_monomial_gpe(&self, variables: &[Ast]) -> bool {
         if variables.contains(self) {
             return true;
@@ -75,6 +74,8 @@ impl Ast {
         variables.iter().all(|var| self.is_free_of(var))
     }
 
+    /// Returns the degree of the generalized monomial expression in `variables`.
+    /// If `self` is not a monomial in `variables`, returns `Ast::Und`.
     pub fn monomial_degree_gpe(&self, variables: &[Ast]) -> Ast {
         if variables.contains(self) {
             return int(1);
@@ -103,6 +104,8 @@ impl Ast {
         }
     }
 
+    /// Returns whether `self` is a generalized polynomial expression in
+    /// `variables`.
     pub fn is_polynomial_gpe(&self, variables: &[Ast]) -> bool {
         if !self.is_sum() {
             self.is_monomial_gpe(variables)
@@ -118,6 +121,8 @@ impl Ast {
         }
     }
 
+    /// Returns the degree of the generalized polynomial expression in `variables`.
+    /// If `self` is not a polynomial in `variables`, returns `Ast::Und`.
     pub fn polynomial_degree_gpe(&self, variables: &[Ast]) -> Ast {
         if !self.is_sum() {
             self.monomial_degree_gpe(variables)
@@ -145,6 +150,15 @@ impl Ast {
                 _ => unreachable!(),
             }
         }
+    }
+
+    /// Returns the degree of the generalized polynomial expression in `variables`.
+    /// If `self` is not a polynomial in `variables`, returns `Ast::Und`.
+    ///
+    /// This is an alias of `polynomial_degree_gpe` , which works for monomials as
+    /// well as polynomials.
+    pub fn degree_gpe(&self, variables: &[Ast]) -> Ast {
+        self.polynomial_degree_gpe(variables)
     }
 }
 
@@ -285,6 +299,22 @@ mod tests {
                 .simplify()
                 .polynomial_degree_gpe(&[sym("x"), sym("z")]),
             int(7)
+        );
+    }
+
+    #[test]
+    fn total_degree() {
+        let ast = expect_ast("a * x^2 + b * x + c").simplify();
+        let vars = ast.variables();
+
+        assert_eq!(
+            vars,
+            BTreeSet::from([sym("a"), sym("b"), sym("c"), sym("x"),])
+        );
+
+        assert_eq!(
+            ast.polynomial_degree_gpe(&vars.into_iter().collect::<Vec<_>>()),
+            int(3)
         );
     }
 }
