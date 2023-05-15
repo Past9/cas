@@ -3,7 +3,7 @@ use crate::ast::{
     Ast,
 };
 
-use num::{bigint::ToBigInt, BigInt, BigUint, ToPrimitive, Zero};
+use num::{bigint::ToBigInt, BigInt, BigRational, BigUint, FromPrimitive, ToPrimitive, Zero};
 use std::{borrow::Borrow, collections::BTreeSet};
 
 #[derive(PartialEq, Debug)]
@@ -432,6 +432,7 @@ impl Ast {
                     iter.next().unwrap().algebraic_expand(),
                     Ast::Sum(Vec::from_iter(iter)).simplify().algebraic_expand(),
                 ])
+                .simplify()
             }
             Ast::Prd(operands) => {
                 let mut iter = operands.into_iter();
@@ -439,6 +440,7 @@ impl Ast {
                     iter.next().unwrap().algebraic_expand(),
                     Ast::Prd(Vec::from_iter(iter)).simplify().algebraic_expand(),
                 )
+                .simplify()
             }
             Ast::Pow(base, exp) => {
                 if exp.is_int() && *exp >= int(2) {
@@ -460,6 +462,7 @@ impl Ast {
                 Self::expand_product(Ast::Sum(Vec::from_iter(iter)).simplify(), s),
             ])
             .simplify()
+            .algebraic_expand()
         } else if s.is_sum() {
             Self::expand_product(s, r)
         } else {
@@ -486,11 +489,10 @@ impl Ast {
                     Self::expand_power(Ast::Sum(rest.clone()).simplify(), k),
                 ));
             }
-            Ast::Sum(s)
+            Ast::Sum(s).simplify().algebraic_expand()
         } else {
             pow(u, n)
         }
-        .simplify()
     }
 }
 
@@ -803,16 +805,9 @@ mod tests {
     }
 
     #[test]
-    fn algebraic_expand_once() {
+    fn algebraic_expand_full() {
         assert_eq!(
             expect_ast("(x * (y + 1)^(3/2) + 1) * (x * (y + 1)^(3/2) - 1)")
-                .simplify()
-                .algebraic_expand(),
-            expect_ast("x^2 * (y + 1)^3 - 1").simplify()
-        );
-
-        assert_eq!(
-            expect_ast("x^2 * (y + 1)^3 - 1")
                 .simplify()
                 .algebraic_expand(),
             expect_ast("x^2 * y^3 + 3 * x^2 * y^2 + 3 * x^2 * y + x^2 - 1").simplify()
@@ -822,23 +817,7 @@ mod tests {
             expect_ast("(x * (y + 1)^(1/2) + 1)^4")
                 .simplify()
                 .algebraic_expand(),
-            expect_ast("x^4 * (y + 1)^2 + 4 * x^3 * (y + 1) ^ (3/2) + 6 * x^2 * (y + 1) + 4 * x * (y + 1)^(1/2) + 1").simplify()
-        );
-
-        assert_eq!(
-            expect_ast("x^4 * (y + 1)^2 + 4 * x^3 * (y + 1) ^ (3/2) + 6 * x^2 * (y + 1) + 4 * x * (y + 1)^(1/2) + 1").simplify()
-                .algebraic_expand(),
             expect_ast("x^4 * y^2 + 2 * x^4 * y + x^4 + 4 * x^3 * (y + 1)^(3/2) + 6 * x^2 * y + 6 * x^2 + 4 * x * (y + 1) ^ (1/2) + 1").simplify()
-        );
-    }
-
-    #[test]
-    fn algebraic_expand_full() {
-        assert_eq!(
-            expect_ast("(x * (y + 1)^(3/2) + 1) * (x * (y + 1)^(3/2) - 1)")
-                .simplify()
-                .algebraic_expand(),
-            expect_ast("x^2 * y^3 + 3 * x^2 * y^2 + 3 * x^2 * y + x^2 - 1").simplify()
         );
     }
 }
