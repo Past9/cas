@@ -474,7 +474,7 @@ impl Ast {
             let first = iter.next().unwrap();
             let rest = Vec::from_iter(iter);
             let mut s = Vec::new();
-            for i in 0..n.clone().expect_uint().to_i128().unwrap() {
+            for i in 0..=n.clone().expect_uint().to_i128().unwrap() {
                 let k = int(i);
                 let c = quo(
                     fac(n.clone()).simplify(),
@@ -803,20 +803,42 @@ mod tests {
     }
 
     #[test]
-    fn algebraic_expand() {
-        let expand1 = expect_ast("(x * (y + 1)^(3/2) + 1) * (x * (y + 1)^(3/2) - 1)")
-            .simplify()
-            .algebraic_expand();
-
-        assert_eq!(expand1, expect_ast("x^2 * (y + 1)^3 - 1").simplify());
-
-        let expand2 = expand1.algebraic_expand();
+    fn algebraic_expand_once() {
+        assert_eq!(
+            expect_ast("(x * (y + 1)^(3/2) + 1) * (x * (y + 1)^(3/2) - 1)")
+                .simplify()
+                .algebraic_expand(),
+            expect_ast("x^2 * (y + 1)^3 - 1").simplify()
+        );
 
         assert_eq!(
-            expand2,
+            expect_ast("x^2 * (y + 1)^3 - 1")
+                .simplify()
+                .algebraic_expand(),
             expect_ast("x^2 * y^3 + 3 * x^2 * y^2 + 3 * x^2 * y + x^2 - 1").simplify()
         );
 
-        // -1 + x^2 + 3x^2y + 3x^2y^2
+        assert_eq!(
+            expect_ast("(x * (y + 1)^(1/2) + 1)^4")
+                .simplify()
+                .algebraic_expand(),
+            expect_ast("x^4 * (y + 1)^2 + 4 * x^3 * (y + 1) ^ (3/2) + 6 * x^2 * (y + 1) + 4 * x * (y + 1)^(1/2) + 1").simplify()
+        );
+
+        assert_eq!(
+            expect_ast("x^4 * (y + 1)^2 + 4 * x^3 * (y + 1) ^ (3/2) + 6 * x^2 * (y + 1) + 4 * x * (y + 1)^(1/2) + 1").simplify()
+                .algebraic_expand(),
+            expect_ast("x^4 * y^2 + 2 * x^4 * y + x^4 + 4 * x^3 * (y + 1)^(3/2) + 6 * x^2 * y + 6 * x^2 + 4 * x * (y + 1) ^ (1/2) + 1").simplify()
+        );
+    }
+
+    #[test]
+    fn algebraic_expand_full() {
+        assert_eq!(
+            expect_ast("(x * (y + 1)^(3/2) + 1) * (x * (y + 1)^(3/2) - 1)")
+                .simplify()
+                .algebraic_expand(),
+            expect_ast("x^2 * y^3 + 3 * x^2 * y^2 + 3 * x^2 * y + x^2 - 1").simplify()
+        );
     }
 }

@@ -44,6 +44,13 @@ impl Ast {
         }
     }
 
+    pub fn is_frc(&self) -> bool {
+        match self {
+            Ast::Frc(frc) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_pos_const(&self) -> bool {
         self.is_pos_int() || self.is_pos_frc()
     }
