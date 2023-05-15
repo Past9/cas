@@ -1,9 +1,14 @@
-use crate::ast::{
-    helpers::{dif, fac, int, pow, prd, quo, sum},
-    Ast,
+use crate::{
+    ast::{
+        helpers::{dif, fac, int, pow, prd, quo, sum},
+        Ast,
+    },
+    rational::NumDen,
 };
 
-use num::{bigint::ToBigInt, BigInt, BigRational, BigUint, FromPrimitive, ToPrimitive, Zero};
+use num::{
+    bigint::ToBigInt, BigInt, BigRational, BigUint, FromPrimitive, Rational, ToPrimitive, Zero,
+};
 use std::{borrow::Borrow, collections::BTreeSet};
 
 #[derive(PartialEq, Debug)]
@@ -425,6 +430,16 @@ impl Ast {
     }
 
     pub fn algebraic_expand(self) -> Self {
+        if let Some(NumDen { num, den }) = self.num_den() {
+            //println!("D1 {:?}", den);
+            //println!("D2 {:?}", den.do_algebraic_expand());
+            quo(num.do_algebraic_expand(), den.do_algebraic_expand()).simplify()
+        } else {
+            Ast::Und
+        }
+    }
+
+    fn do_algebraic_expand(self) -> Self {
         match self {
             Ast::Sum(operands) => {
                 let mut iter = operands.into_iter();
@@ -443,12 +458,37 @@ impl Ast {
                 .simplify()
             }
             Ast::Pow(base, exp) => {
-                if exp.is_int() && *exp >= int(2) {
-                    Self::expand_power(base.algebraic_expand(), *exp)
-                } else {
-                    Ast::Pow(base, exp)
+                if let Ast::Int(ref int) = *exp {
+                    if int >= &BigInt::from_i32(2).unwrap() {
+                        return Self::expand_posint_power(
+                            base.algebraic_expand(),
+                            int.to_biguint().unwrap(),
+                        );
+                    }
+                } else if let Ast::Frc(ref frc) = *exp {
+                    let floor = frc.floor();
+                    let remainder = frc - floor.clone();
+
+                    if floor >= BigRational::from_i32(2).unwrap() {
+                        return prd([
+                            pow(*base.clone(), Ast::from_frac(floor))
+                                .simplify()
+                                .algebraic_expand(),
+                            pow(*base, Ast::from_frac(remainder))
+                                .simplify()
+                                .algebraic_expand(),
+                        ])
+                        .simplify()
+                        .algebraic_expand();
+                    }
                 }
+
+                Ast::Pow(base, exp)
             }
+            Ast::Fun(name, args) => Ast::Fun(
+                name,
+                args.into_iter().map(|arg| arg.algebraic_expand()).collect(),
+            ),
             _ => self,
         }
         .simplify()
@@ -471,27 +511,40 @@ impl Ast {
         .simplify()
     }
 
-    fn expand_power(u: Ast, n: Ast) -> Ast {
+    fn expand_posint_power(u: Ast, n: BigUint) -> Ast {
         if let Ast::Sum(operands) = u {
             let mut iter = operands.into_iter();
             let first = iter.next().unwrap();
             let rest = Vec::from_iter(iter);
             let mut s = Vec::new();
-            for i in 0..=n.clone().expect_uint().to_i128().unwrap() {
-                let k = int(i);
+            for i in 0..=n.to_i128().unwrap() {
+                let k = BigUint::from_i128(i).unwrap();
                 let c = quo(
-                    fac(n.clone()).simplify(),
-                    prd([fac(k.clone()), fac(dif(n.clone(), k.clone()))]),
+                    fac(Ast::from_biguint(n.clone())).simplify(),
+                    prd([
+                        fac(Ast::from_biguint(k.clone())),
+                        fac(dif(
+                            Ast::from_biguint(n.clone()),
+                            Ast::from_biguint(k.clone()),
+                        )),
+                    ]),
                 )
                 .simplify();
                 s.push(Self::expand_product(
-                    prd([c, pow(first.clone(), dif(n.clone(), k.clone()))]).simplify(),
-                    Self::expand_power(Ast::Sum(rest.clone()).simplify(), k),
+                    prd([
+                        c,
+                        pow(
+                            first.clone(),
+                            dif(Ast::from_biguint(n.clone()), Ast::from_biguint(k.clone())),
+                        ),
+                    ])
+                    .simplify(),
+                    Self::expand_posint_power(Ast::Sum(rest.clone()).simplify(), k.clone()),
                 ));
             }
             Ast::Sum(s).simplify().algebraic_expand()
         } else {
-            pow(u, n)
+            pow(u, Ast::from_biguint(n))
         }
     }
 }
@@ -818,6 +871,45 @@ mod tests {
                 .simplify()
                 .algebraic_expand(),
             expect_ast("x^4 * y^2 + 2 * x^4 * y + x^4 + 4 * x^3 * (y + 1)^(3/2) + 6 * x^2 * y + 6 * x^2 + 4 * x * (y + 1) ^ (1/2) + 1").simplify()
+        );
+
+        assert_eq!(
+            expect_ast("a / ((x + 1) * (x + 2))")
+                .simplify()
+                .algebraic_expand(),
+            expect_ast("a / (x^2 + 3 * x + 2)").simplify()
+        );
+
+        // Denominator becomes 0, so expression is 1/0, or undefined
+        assert_eq!(
+            expect_ast("1 / (x^2 + x - x * (x + 1))")
+                .simplify()
+                .algebraic_expand(),
+            und()
+        );
+
+        assert_eq!(
+            expect_ast("1 / (x^2 + 1 - x * (x + 1))")
+                .simplify()
+                .algebraic_expand(),
+            expect_ast("1 / (1 - x)").simplify()
+        );
+
+        assert_eq!(
+            expect_ast("sin(a * (b + c))").simplify().algebraic_expand(),
+            expect_ast("sin(a * b + a * c)").simplify()
+        );
+
+        assert_eq!(
+            expect_ast("a / (b * (c + d))")
+                .simplify()
+                .algebraic_expand(),
+            expect_ast("a / (b * c + b * d)").simplify()
+        );
+
+        assert_eq!(
+            expect_ast("(x + 1)^(5/2)").simplify().algebraic_expand(),
+            expect_ast("(x + 1)^(1/2) * x^2 + 2 * (x + 1)^(1/2) * x + (x + 1)^(1/2)").simplify()
         );
     }
 }

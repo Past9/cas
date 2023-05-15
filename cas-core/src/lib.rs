@@ -3,6 +3,7 @@ mod error;
 mod helpers;
 mod parse;
 mod polynomial;
+mod rational;
 mod simplify;
 mod tokenize;
 

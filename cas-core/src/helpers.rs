@@ -1,4 +1,4 @@
-use num::{BigInt, BigRational, BigUint, One, Signed, Zero};
+use num::{bigint::ToBigInt, BigInt, BigRational, BigUint, One, Signed, Zero};
 use rust_decimal::Decimal;
 
 use crate::ast::Ast;
@@ -21,6 +21,10 @@ impl Ast {
 
     pub fn from_int(int: BigInt) -> Self {
         Self::Int(int)
+    }
+
+    pub fn from_biguint(int: BigUint) -> Self {
+        Self::Int(int.to_bigint().unwrap())
     }
 
     pub fn is_undefined(&self) -> bool {
@@ -93,6 +97,14 @@ impl Ast {
     pub fn is_const(&self) -> bool {
         match self {
             Ast::Int(_) | Ast::Frc(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_neg_const(&self) -> bool {
+        match self {
+            Ast::Int(int) => int.is_negative(),
+            Ast::Frc(frc) => frc.is_negative(),
             _ => false,
         }
     }
