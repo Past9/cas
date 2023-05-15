@@ -1,9 +1,9 @@
 use crate::ast::{
-    helpers::{int, pow, prd, quo, sum},
+    helpers::{dif, fac, int, pow, prd, quo, sum},
     Ast,
 };
 
-use num::{bigint::ToBigInt, BigInt, BigUint, Zero};
+use num::{bigint::ToBigInt, BigInt, BigUint, ToPrimitive, Zero};
 use std::{borrow::Borrow, collections::BTreeSet};
 
 #[derive(PartialEq, Debug)]
@@ -423,6 +423,75 @@ impl Ast {
             return Ast::Sum(v).simplify();
         }
     }
+
+    pub fn algebraic_expand(self) -> Self {
+        match self {
+            Ast::Sum(operands) => {
+                let mut iter = operands.into_iter();
+                sum([
+                    iter.next().unwrap().algebraic_expand(),
+                    Ast::Sum(Vec::from_iter(iter)).simplify().algebraic_expand(),
+                ])
+            }
+            Ast::Prd(operands) => {
+                let mut iter = operands.into_iter();
+                Self::expand_product(
+                    iter.next().unwrap().algebraic_expand(),
+                    Ast::Prd(Vec::from_iter(iter)).simplify().algebraic_expand(),
+                )
+            }
+            Ast::Pow(base, exp) => {
+                if exp.is_int() && *exp >= int(2) {
+                    Self::expand_power(base.algebraic_expand(), *exp)
+                } else {
+                    Ast::Pow(base, exp)
+                }
+            }
+            _ => self,
+        }
+        .simplify()
+    }
+
+    fn expand_product(r: Ast, s: Ast) -> Ast {
+        if let Ast::Sum(operands) = r {
+            let mut iter = operands.into_iter();
+            sum([
+                Self::expand_product(iter.next().unwrap(), s.clone()),
+                Self::expand_product(Ast::Sum(Vec::from_iter(iter)).simplify(), s),
+            ])
+            .simplify()
+        } else if s.is_sum() {
+            Self::expand_product(s, r)
+        } else {
+            prd([r, s])
+        }
+        .simplify()
+    }
+
+    fn expand_power(u: Ast, n: Ast) -> Ast {
+        if let Ast::Sum(operands) = u {
+            let mut iter = operands.into_iter();
+            let first = iter.next().unwrap();
+            let rest = Vec::from_iter(iter);
+            let mut s = Vec::new();
+            for i in 0..n.clone().expect_uint().to_i128().unwrap() {
+                let k = int(i);
+                let c = quo(
+                    fac(n.clone()).simplify(),
+                    prd([fac(k.clone()), fac(dif(n.clone(), k.clone()))]),
+                )
+                .simplify();
+                s.push(Self::expand_product(
+                    prd([c, pow(first.clone(), dif(n.clone(), k.clone()))]).simplify(),
+                    Self::expand_power(Ast::Sum(rest.clone()).simplify(), k),
+                ));
+            }
+            Ast::Sum(s)
+        } else {
+            pow(u, n)
+        }
+        .simplify()
+    }
 }
 
 #[cfg(test)]
@@ -731,5 +800,23 @@ mod tests {
                 .collect_terms(&[sym("a"), sym("b")]),
             expect_ast("(2 * x * y + 4 * x) * a + (3 * x * y + 5 * x) * b").simplify()
         );
+    }
+
+    #[test]
+    fn algebraic_expand() {
+        let expand1 = expect_ast("(x * (y + 1)^(3/2) + 1) * (x * (y + 1)^(3/2) - 1)")
+            .simplify()
+            .algebraic_expand();
+
+        assert_eq!(expand1, expect_ast("x^2 * (y + 1)^3 - 1").simplify());
+
+        let expand2 = expand1.algebraic_expand();
+
+        assert_eq!(
+            expand2,
+            expect_ast("x^2 * y^3 + 3 * x^2 * y^2 + 3 * x^2 * y + x^2 - 1").simplify()
+        );
+
+        // -1 + x^2 + 3x^2y + 3x^2y^2
     }
 }
