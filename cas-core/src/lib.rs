@@ -44,3 +44,7 @@ impl Operands {
         *self.operands.entry(operand).or_insert(1) += 1;
     }
 }
+
+pub fn foo() {
+    println!("BAR");
+}
