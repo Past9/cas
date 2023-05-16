@@ -24,11 +24,11 @@ impl GpeCoefficient {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct CoefficientVar {
+pub struct CoeffVar {
     pub coefficient: Ast,
     pub var: Ast,
 }
-impl CoefficientVar {
+impl CoeffVar {
     pub fn new(coefficient: Ast, var: Ast) -> Self {
         Self { coefficient, var }
     }
@@ -37,7 +37,7 @@ impl CoefficientVar {
 impl Ast {
     /// Returns all the general variable expressions for which `self` is a
     /// generalized polynomial expression.
-    pub fn variables(&self) -> BTreeSet<Ast> {
+    pub fn vars_gpe(&self) -> BTreeSet<Ast> {
         match self {
             // VAR-1
             Ast::Und | Ast::Int(_) | Ast::Frc(_) => BTreeSet::new(),
@@ -56,7 +56,7 @@ impl Ast {
                 let mut set = BTreeSet::new();
 
                 for operand in operands.iter() {
-                    set.extend(operand.variables());
+                    set.extend(operand.vars_gpe());
                 }
 
                 set
@@ -70,7 +70,7 @@ impl Ast {
                     if operand.is_sum() {
                         set.insert(operand.clone());
                     } else {
-                        set.extend(operand.variables());
+                        set.extend(operand.vars_gpe());
                     }
                 }
 
@@ -88,10 +88,7 @@ impl Ast {
 
     /// Returns whether `self` is a generalized monomial expression in
     /// `variables`.
-    pub fn is_monomial_gpe<T: Borrow<Ast>, I: IntoIterator<Item = T> + Clone>(
-        &self,
-        variables: I,
-    ) -> bool {
+    pub fn is_gme<T: Borrow<Ast>, I: IntoIterator<Item = T> + Clone>(&self, variables: I) -> bool {
         if variables
             .clone()
             .into_iter()
@@ -109,10 +106,7 @@ impl Ast {
                 return true;
             }
         } else if let Ast::Prd(operands) = self {
-            if operands
-                .iter()
-                .any(|op| !op.is_monomial_gpe(variables.clone()))
-            {
+            if operands.iter().any(|op| !op.is_gme(variables.clone())) {
                 return false;
             } else {
                 return true;
@@ -126,7 +120,7 @@ impl Ast {
 
     /// Returns the degree of the generalized monomial expression in `variables`.
     /// If `self` is not a monomial in `variables`, returns `Ast::Und`.
-    pub fn monomial_degree_gpe<T: Borrow<Ast>, I: IntoIterator<Item = T> + Clone>(
+    pub fn degree_gme<T: Borrow<Ast>, I: IntoIterator<Item = T> + Clone>(
         &self,
         variables: I,
     ) -> Ast {
@@ -149,7 +143,7 @@ impl Ast {
         } else if let Ast::Prd(operands) = self {
             let mut degree: BigInt = 0.into();
             for operand in operands.iter() {
-                match operand.monomial_degree_gpe(variables.clone()) {
+                match operand.degree_gme(variables.clone()) {
                     Ast::Int(deg) => degree += deg,
                     _ => {
                         return Ast::Und;
@@ -173,16 +167,20 @@ impl Ast {
 
     /// Returns whether `self` is a generalized polynomial expression in
     /// `variables`.
-    pub fn is_gpe(&self, variables: &[Ast]) -> bool {
+    pub fn is_gpe<T: Borrow<Ast>, I: IntoIterator<Item = T> + Clone>(&self, variables: I) -> bool {
         if !self.is_sum() {
-            self.is_monomial_gpe(variables)
+            self.is_gme(variables)
         } else {
-            if variables.contains(self) {
+            if variables
+                .clone()
+                .into_iter()
+                .any(|var| var.borrow() == self)
+            {
                 return true;
             }
 
             match self {
-                Ast::Sum(ops) => ops.iter().all(|op| op.is_monomial_gpe(variables)),
+                Ast::Sum(ops) => ops.iter().all(|op| op.is_gme(variables.clone())),
                 _ => unreachable!(),
             }
         }
@@ -195,7 +193,7 @@ impl Ast {
         variables: I,
     ) -> Ast {
         if !self.is_sum() {
-            self.monomial_degree_gpe(variables)
+            self.degree_gme(variables)
         } else {
             if variables
                 .clone()
@@ -209,7 +207,7 @@ impl Ast {
                 Ast::Sum(ops) => {
                     let mut max: BigInt = 0.into();
                     for op in ops.iter() {
-                        let deg = op.monomial_degree_gpe(variables.clone());
+                        let deg = op.degree_gme(variables.clone());
                         if let Ast::Int(deg) = deg {
                             if deg > max {
                                 max = deg;
@@ -226,7 +224,7 @@ impl Ast {
         }
     }
 
-    pub fn coefficient_monomial_gpe(&self, variable: &Ast) -> Option<GpeCoefficient> {
+    pub fn coeff_gme(&self, variable: &Ast) -> Option<GpeCoefficient> {
         if self == variable {
             return Some(GpeCoefficient::new(int(1), 1u32.into()));
         } else if let Ast::Pow(base, exp) = self {
@@ -237,7 +235,7 @@ impl Ast {
             let mut out_degree: BigUint = 0u32.into();
             let mut out_coefficient = self.clone();
             for operand in operands.iter() {
-                let gpe_coefficient = operand.coefficient_monomial_gpe(variable);
+                let gpe_coefficient = operand.coeff_gme(variable);
                 if let Some(GpeCoefficient { degree, .. }) = gpe_coefficient {
                     if !degree.is_zero() {
                         out_degree = degree;
@@ -262,9 +260,9 @@ impl Ast {
         }
     }
 
-    pub fn coefficient_gpe(&self, variable: &Ast, monomial_index: BigUint) -> Ast {
+    pub fn coeff_gpe(&self, variable: &Ast, monomial_index: BigUint) -> Ast {
         if !self.is_sum() {
-            let mono_co = self.coefficient_monomial_gpe(variable);
+            let mono_co = self.coeff_gme(variable);
             match mono_co {
                 Some(co) => {
                     if monomial_index == co.degree {
@@ -288,7 +286,7 @@ impl Ast {
 
             let mut co = int(0);
             for operand in self.iter_operands() {
-                match operand.coefficient_monomial_gpe(variable) {
+                match operand.coeff_gme(variable) {
                     Some(gpe_co) => {
                         if gpe_co.degree == monomial_index {
                             co = sum([co, gpe_co.coefficient]).simplify();
@@ -304,12 +302,12 @@ impl Ast {
         }
     }
 
-    pub fn leading_coefficient_gpe(&self, variable: &Ast) -> Ast {
+    pub fn leading_coeff_gpe(&self, variable: &Ast) -> Ast {
         let degree = self.degree_gpe([variable]);
         match degree {
             Ast::Int(int) => {
                 if int > 1.into() {
-                    self.coefficient_gpe(variable, int.to_biguint().unwrap())
+                    self.coeff_gpe(variable, int.to_biguint().unwrap())
                 } else {
                     Ast::Und
                 }
@@ -318,16 +316,16 @@ impl Ast {
         }
     }
 
-    pub fn coefficient_var_monomial<T: Borrow<Ast>, I: IntoIterator<Item = T> + Clone>(
+    pub fn coeff_var_gme<T: Borrow<Ast>, I: IntoIterator<Item = T> + Clone>(
         &self,
         variables: I,
-    ) -> Option<CoefficientVar> {
+    ) -> Option<CoeffVar> {
         if variables
             .clone()
             .into_iter()
             .any(|var| var.borrow() == self)
         {
-            return Some(CoefficientVar::new(int(1), self.clone()));
+            return Some(CoeffVar::new(int(1), self.clone()));
         } else if let Ast::Pow(base, exp) = self {
             if variables
                 .clone()
@@ -336,7 +334,7 @@ impl Ast {
                 && exp.is_int()
                 && **exp > int(1)
             {
-                return Some(CoefficientVar::new(
+                return Some(CoeffVar::new(
                     int(1),
                     pow((**base).clone(), (**exp).clone()),
                 ));
@@ -345,8 +343,8 @@ impl Ast {
             let mut co_parts = Vec::new();
             let mut var_parts = Vec::new();
             for operand in operands.iter() {
-                if let Some(CoefficientVar { coefficient, var }) =
-                    operand.coefficient_var_monomial(variables.clone())
+                if let Some(CoeffVar { coefficient, var }) =
+                    operand.coeff_var_gme(variables.clone())
                 {
                     co_parts.push(coefficient);
                     var_parts.push(var)
@@ -355,7 +353,7 @@ impl Ast {
                 }
             }
 
-            return Some(CoefficientVar::new(
+            return Some(CoeffVar::new(
                 Ast::Prd(co_parts).simplify(),
                 Ast::Prd(var_parts).simplify(),
             ));
@@ -365,7 +363,7 @@ impl Ast {
             .into_iter()
             .all(|var| self.is_free_of(var.borrow()))
         {
-            Some(CoefficientVar::new(self.clone(), int(1)))
+            Some(CoeffVar::new(self.clone(), int(1)))
         } else {
             None
         }
@@ -376,7 +374,7 @@ impl Ast {
         variables: I,
     ) -> Ast {
         if !self.is_sum() {
-            if self.coefficient_var_monomial(variables).is_none() {
+            if self.coeff_var_gme(variables).is_none() {
                 Ast::Und
             } else {
                 self
@@ -390,17 +388,17 @@ impl Ast {
                 return self;
             }
 
-            let mut t: Vec<CoefficientVar> = Vec::new();
+            let mut t: Vec<CoeffVar> = Vec::new();
             let mut n = 0;
             for operand in self.iter_operands() {
-                if let Some(CoefficientVar { coefficient, var }) =
-                    operand.coefficient_var_monomial(variables.clone())
+                if let Some(CoeffVar { coefficient, var }) =
+                    operand.coeff_var_gme(variables.clone())
                 {
                     let mut j = 1;
                     let mut combined = false;
                     while !combined && j <= n {
                         if var == t[j - 1].var {
-                            t[j - 1] = CoefficientVar::new(
+                            t[j - 1] = CoeffVar::new(
                                 sum([coefficient.clone(), t[j - 1].coefficient.clone()]).simplify(),
                                 var.clone(),
                             );
@@ -410,7 +408,7 @@ impl Ast {
                     }
 
                     if !combined {
-                        t.push(CoefficientVar::new(coefficient, var));
+                        t.push(CoeffVar::new(coefficient, var));
                         n += 1;
                     }
                 } else {
@@ -551,29 +549,27 @@ impl Ast {
 mod tests {
     use std::collections::BTreeSet;
 
-    use crate::{ast::helpers::*, helpers::expect_ast, polynomial::CoefficientVar};
+    use crate::{ast::helpers::*, helpers::expect_ast, polynomial::CoeffVar};
 
     #[test]
     fn identifies_monomial_gpe() {
         assert!(expect_ast("a * x ^ 2 * y ^ 2")
             .simplify()
-            .is_monomial_gpe(&[sym("x"), sym("y")]));
+            .is_gme(&[sym("x"), sym("y")]));
 
         assert!(!expect_ast("x ^ 2 + y ^ 2")
             .simplify()
-            .is_monomial_gpe(&[sym("x"), sym("y")]));
+            .is_gme(&[sym("x"), sym("y")]));
 
-        assert!(!expect_ast("x / y")
-            .simplify()
-            .is_monomial_gpe(&[sym("x"), sym("y")]));
+        assert!(!expect_ast("x / y").simplify().is_gme(&[sym("x"), sym("y")]));
 
         assert!(expect_ast("(a + b)")
             .simplify()
-            .is_monomial_gpe(&[sum([sym("a"), sym("b")])]));
+            .is_gme(&[sum([sym("a"), sym("b")])]));
 
         assert!(expect_ast("(a + b) ^ 2")
             .simplify()
-            .is_monomial_gpe(&[sum([sym("a"), sym("b")])]));
+            .is_gme(&[sum([sym("a"), sym("b")])]));
     }
 
     #[test]
@@ -608,14 +604,14 @@ mod tests {
         assert_eq!(
             expect_ast("x ^ 3 + 3 * x ^ 2 * y + 3 * x * y ^ 2 + y ^ 3")
                 .simplify()
-                .variables(),
+                .vars_gpe(),
             BTreeSet::from([sym("x"), sym("y")])
         );
 
         assert_eq!(
             expect_ast("3 * x * (x + 1) * y ^ 2 * z ^ n")
                 .simplify()
-                .variables(),
+                .vars_gpe(),
             BTreeSet::from([
                 sym("x"),
                 sum([int(1), sym("x")]),
@@ -627,16 +623,16 @@ mod tests {
         assert_eq!(
             expect_ast("a * sin(x) ^ 2 + 2 * b * sin(x) + 3 * c")
                 .simplify()
-                .variables(),
+                .vars_gpe(),
             BTreeSet::from([sym("a"), sym("b"), sym("c"), fun("sin", [sym("x")])])
         );
 
-        assert_eq!(expect_ast("1/2").simplify().variables(), BTreeSet::new());
+        assert_eq!(expect_ast("1/2").simplify().vars_gpe(), BTreeSet::new());
 
         assert_eq!(
             expect_ast("2 ^ (1/2) * x ^ 2 + 3 ^ (1/2) * x + 5 ^ (1/2)")
                 .simplify()
-                .variables(),
+                .vars_gpe(),
             BTreeSet::from([
                 sym("x"),
                 pow(int(2), frc(1, 2)),
@@ -651,7 +647,7 @@ mod tests {
         assert_eq!(
             expect_ast("3 * w * x^2 * y^3 * z^4")
                 .simplify()
-                .monomial_degree_gpe(&[sym("x"), sym("z")]),
+                .degree_gme(&[sym("x"), sym("z")]),
             int(6)
         );
     }
@@ -690,7 +686,7 @@ mod tests {
     #[test]
     fn total_degree() {
         let ast = expect_ast("a * x^2 + b * x + c").simplify();
-        let vars = ast.variables();
+        let vars = ast.vars_gpe();
 
         assert_eq!(
             vars,
@@ -708,14 +704,14 @@ mod tests {
         assert_eq!(
             expect_ast("a * x^2 + b * x + c")
                 .simplify()
-                .coefficient_gpe(&sym("x"), 2u32.into()),
+                .coeff_gpe(&sym("x"), 2u32.into()),
             sym("a")
         );
 
         assert_eq!(
             expect_ast("3 * x * y^2 + 5 * x^2 * y + 7 * x + 9")
                 .simplify()
-                .coefficient_gpe(&sym("x"), 1u32.into()),
+                .coeff_gpe(&sym("x"), 1u32.into()),
             // 3 * y^2 + 7
             sum([int(7), prd([int(3), pow(sym("y"), int(2))])])
         );
@@ -723,14 +719,14 @@ mod tests {
         assert_eq!(
             expect_ast("3 * x * y^2 + 5 * x^2 * y + 7 * x + 9")
                 .simplify()
-                .coefficient_gpe(&sym("x"), 3u32.into()),
+                .coeff_gpe(&sym("x"), 3u32.into()),
             int(0)
         );
 
         assert_eq!(
             expect_ast("(3 * sin(x)) * x^2 + (2 * ln(x)) * x + 4")
                 .simplify()
-                .coefficient_gpe(&sym("x"), 2u32.into()),
+                .coeff_gpe(&sym("x"), 2u32.into()),
             und()
         );
 
@@ -739,8 +735,8 @@ mod tests {
         assert_eq!(
             expect_ast("3 * x * y^2 + 5 * x^2 * y + 7 * x + 9")
                 .simplify()
-                .coefficient_gpe(&sym("x"), 1u32.into())
-                .coefficient_gpe(&sym("y"), 2u32.into()),
+                .coeff_gpe(&sym("x"), 1u32.into())
+                .coeff_gpe(&sym("y"), 2u32.into()),
             int(3)
         );
 
@@ -750,8 +746,8 @@ mod tests {
         assert_eq!(
             expect_ast("3 * sin(x) * x^2 + 2 * ln(x) * x + 4")
                 .simplify()
-                .coefficient_gpe(&fun("ln", [sym("x")]), 1u32.into())
-                .coefficient_gpe(&sym("x"), 1u32.into()),
+                .coeff_gpe(&fun("ln", [sym("x")]), 1u32.into())
+                .coeff_gpe(&sym("x"), 1u32.into()),
             int(2)
         );
     }
@@ -761,7 +757,7 @@ mod tests {
         assert_eq!(
             expect_ast("3 * x * y^2 + 5 * x^2 * y + 7 * x^2 * y^3 + 9")
                 .simplify()
-                .leading_coefficient_gpe(&sym("x")),
+                .leading_coeff_gpe(&sym("x")),
             // 5 * y + 7 * y^3
             sum([
                 prd([int(5), sym("y")]),
@@ -775,8 +771,8 @@ mod tests {
         assert_eq!(
             expect_ast("a * x ^ 2 * y ^ 2")
                 .simplify()
-                .coefficient_var_monomial(&[sym("x"), sym("y")]),
-            Some(CoefficientVar::new(
+                .coeff_var_gme(&[sym("x"), sym("y")]),
+            Some(CoeffVar::new(
                 sym("a"),
                 prd([pow(sym("x"), int(2)), pow(sym("y"), int(2)),])
             ))
@@ -785,43 +781,39 @@ mod tests {
         assert_eq!(
             expect_ast("x ^ 2 + y ^ 2")
                 .simplify()
-                .coefficient_var_monomial(&[sym("x"), sym("y")]),
+                .coeff_var_gme(&[sym("x"), sym("y")]),
             None
         );
 
         assert_eq!(
             expect_ast("x / y")
                 .simplify()
-                .coefficient_var_monomial(&[sym("x"), sym("y")]),
+                .coeff_var_gme(&[sym("x"), sym("y")]),
             None
         );
 
         assert_eq!(
-            expect_ast("x / y")
-                .simplify()
-                .coefficient_var_monomial(&[sym("y")]),
+            expect_ast("x / y").simplify().coeff_var_gme(&[sym("y")]),
             None
         );
 
         assert_eq!(
-            expect_ast("x / y")
-                .simplify()
-                .coefficient_var_monomial(&[sym("x")]),
-            Some(CoefficientVar::new(pow(sym("y"), int(-1)), sym("x")))
+            expect_ast("x / y").simplify().coeff_var_gme(&[sym("x")]),
+            Some(CoeffVar::new(pow(sym("y"), int(-1)), sym("x")))
         );
 
         assert_eq!(
             expect_ast("(a + b)")
                 .simplify()
-                .coefficient_var_monomial(&[sum([sym("a"), sym("b")])]),
-            Some(CoefficientVar::new(int(1), sum([sym("a"), sym("b")])))
+                .coeff_var_gme(&[sum([sym("a"), sym("b")])]),
+            Some(CoeffVar::new(int(1), sum([sym("a"), sym("b")])))
         );
 
         assert_eq!(
             expect_ast("(a + b) ^ 2")
                 .simplify()
-                .coefficient_var_monomial(&[sum([sym("a"), sym("b")])]),
-            Some(CoefficientVar::new(
+                .coeff_var_gme(&[sum([sym("a"), sym("b")])]),
+            Some(CoeffVar::new(
                 int(1),
                 pow(sum([sym("a"), sym("b")]), int(2))
             ))
@@ -830,8 +822,8 @@ mod tests {
         assert_eq!(
             expect_ast("x^2 * 3 * y * (a + b) ^ 2")
                 .simplify()
-                .coefficient_var_monomial(&[sum([sym("a"), sym("b")])]),
-            Some(CoefficientVar::new(
+                .coeff_var_gme(&[sum([sym("a"), sym("b")])]),
+            Some(CoeffVar::new(
                 prd([int(3), pow(sym("x"), int(2)), sym("y")]),
                 pow(sum([sym("a"), sym("b")]), int(2))
             ))
