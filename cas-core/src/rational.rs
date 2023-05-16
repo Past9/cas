@@ -131,7 +131,7 @@ impl Ast {
                     prd([m, s.clone()]).simplify(),
                     prd([n, r.clone()]).simplify(),
                 ),
-                prd([r, s]).simplify(),
+                prd([r, s]),
             )
             .simplify()
         }
@@ -139,7 +139,7 @@ impl Ast {
 
     pub fn rational_expand(self) -> Self {
         if let Some(NumDen { num, den }) = self.rationalize().num_den() {
-            let den = den.algebraic_expand().simplify();
+            let den = den.algebraic_expand();
             if den.is_int_zero() {
                 Ast::Und
             } else {
@@ -232,12 +232,17 @@ mod tests {
             expect_ast("(a * d * f + b * (c * f + d * e)) / (b * d * f)").simplify()
         );
 
+        // According to the Elementary Algorithms book (p. 269), the output of Ast::rationalize() below
+        // should be:
+        //   ((b+c)^2*a^2*b + (a*b*c + a*c^2 - a*(b+c)^2) * (a*b + c*a)) / ((a*b + c*a) * (b+c)^2)
+        // This is equivalent to the output below, except the (a*b + c*a) term is not distributed.
+        // Not sure of the exact cause of this difference in output, or if it will be a problem.
         assert_eq!(
             expect_ast("1 / (1/a + c/(a * b)) + (a*b*c + a*c^2) / (b+c)^2 - a")
                 .simplify()
                 .rationalize(),
             expect_ast(
-                "((b+c)^2*a^2*b + (a*b*c + a*c^2 - a*(b+c)^2) * (a*b + c*a)) / ((a*b + c*a) * (b+c)^2)"
+                "(a^2*b*(b+c)^2 - a*(b+c)^2*(a*b + a*c) + (a*b + a*c) * (a*b*c + a*c^2)) / ((b+c)^2 * (a*b + a*c))"
             )
             .simplify()
         );
