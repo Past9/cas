@@ -6,9 +6,7 @@ use crate::{
     rational::NumDen,
 };
 
-use num::{
-    bigint::ToBigInt, BigInt, BigRational, BigUint, FromPrimitive, Rational, ToPrimitive, Zero,
-};
+use num::{bigint::ToBigInt, BigInt, BigRational, BigUint, FromPrimitive, ToPrimitive, Zero};
 use std::{borrow::Borrow, collections::BTreeSet};
 
 #[derive(PartialEq, Debug)]
