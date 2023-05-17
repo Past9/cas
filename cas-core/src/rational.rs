@@ -149,6 +149,16 @@ impl Ast {
             Ast::Und
         }
     }
+
+    pub fn rational_expand_full(self) -> Self {
+        let old = self.clone();
+        let expanded = self.rational_expand();
+        if old == expanded {
+            expanded
+        } else {
+            expanded.rational_expand_full()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -246,16 +256,96 @@ mod tests {
             )
             .simplify()
         );
-    }
 
-    #[test]
-    fn does_rational_expansion() {
-        // Denominator is 0, so expression is undefined
         assert_eq!(
             expect_ast("1 / (1/a + c/(a * b)) + (a*b*c + a*c^2) / (b+c)^2 - a")
                 .simplify()
+                .rationalize(),
+            expect_ast(
+                "(a^2*b*(b+c)^2 - a*(b+c)^2*(a*b + a*c) + (a*b + a*c) * (a*b*c + a*c^2)) / ((b+c)^2 * (a*b + a*c))"
+            )
+            .simplify()
+        );
+    }
+
+    #[test]
+    fn does_single_rational_expansion() {
+        // Expression simplifies to zero
+        assert_eq!(
+            expect_ast("(1 / (1/a + c/(a * b))) + ((a*b*c + a*c^2) / (b+c)^2) - a")
+                .simplify()
                 .rational_expand(),
             int(0)
+        );
+
+        // Denominator is 0, so expression is undefined
+        assert_eq!(
+            expect_ast("1 / (x^2 + x - x * (x + 1))")
+                .simplify()
+                .rational_expand(),
+            Ast::Und
+        );
+
+        assert_eq!(
+            expect_ast(
+                "(
+                    ((1 / ((x+y)^2 + 1))^(1/2) + 1) *
+                    ((1 / ((x+y)^2 + 1))^(1/2) - 1)
+                ) / (
+                    x+1
+                )"
+            )
+            .simplify()
+            .rational_expand() // Must be expanded twice, rational_expand() is not recursive
+            .rational_expand(),
+            expect_ast(
+                "(
+                    -(x^2) - 2*x*y - y^2
+                ) / (
+                    x^3 + x^2 + 2*x^2*y + 2*x*y + x*y^2 + y^2 + x + 1
+                )"
+            )
+            .simplify()
+        );
+    }
+
+    #[test]
+    fn does_full_rational_expansion() {
+        // Expression simplifies to zero
+        assert_eq!(
+            expect_ast("(1 / (1/a + c/(a * b))) + ((a*b*c + a*c^2) / (b+c)^2) - a")
+                .simplify()
+                .rational_expand_full(),
+            int(0)
+        );
+
+        // Denominator is 0, so expression is undefined
+        assert_eq!(
+            expect_ast("1 / (x^2 + x - x * (x + 1))")
+                .simplify()
+                .rational_expand_full(),
+            Ast::Und
+        );
+
+        assert_eq!(
+            expect_ast(
+                "(
+                    ((1 / ((x+y)^2 + 1))^(1/2) + 1) *
+                    ((1 / ((x+y)^2 + 1))^(1/2) - 1)
+                ) / (
+                    x+1
+                )"
+            )
+            .simplify()
+            .rational_expand_full(),
+            expect_ast(
+                "(
+                    -(x^2) - 2*x*y - y^2
+                ) / (
+                    x^3 + x^2 + 2*x^2*y + 2*x*y + x*y^2 + y^2 + x + 1
+                )"
+            )
+            .simplify()
         );
     }
 }
