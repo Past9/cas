@@ -1,13 +1,15 @@
-mod ast;
-mod calculus;
-mod error;
-mod helpers;
-mod parse;
-mod polynomial;
-mod rational;
-mod simplify;
-mod tokenize;
-mod trigonometry;
+pub mod ast;
+pub mod bezier;
+pub mod calculus;
+pub mod error;
+pub mod eval;
+pub mod helpers;
+pub mod parse;
+pub mod polynomial;
+pub mod rational;
+pub mod simplify;
+pub mod tokenize;
+pub mod trigonometry;
 
 use std::collections::BTreeMap;
 

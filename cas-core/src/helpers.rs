@@ -1,7 +1,10 @@
 use num::{bigint::ToBigInt, BigInt, BigRational, BigUint, One, Signed, Zero};
 use rust_decimal::Decimal;
 
-use crate::ast::Ast;
+use crate::ast::{
+    helpers::{dif, pow, quo},
+    Ast,
+};
 
 impl Ast {
     pub fn from_dec(dec: Decimal) -> Self {
@@ -174,6 +177,43 @@ impl Ast {
             }
         }
     }
+
+    pub fn substitute(self, old: &Self, new: Self) -> Self {
+        if &self == old {
+            new
+        } else {
+            match self {
+                ast @ (Ast::Fail | Ast::Und | Ast::Sym(_) | Ast::Int(_) | Ast::Frc(_)) => ast,
+
+                Ast::Neg(operand) => operand.substitute(old, new),
+                Ast::Fac(operand) => operand.substitute(old, new),
+                Ast::Sum(operands) => Ast::Sum(
+                    operands
+                        .into_iter()
+                        .map(|op| op.substitute(old, new.clone()))
+                        .collect(),
+                ),
+                Ast::Prd(operands) => Ast::Prd(
+                    operands
+                        .into_iter()
+                        .map(|op| op.substitute(old, new.clone()))
+                        .collect(),
+                ),
+                Ast::Dif(l, r) => dif(l.substitute(old, new.clone()), r.substitute(old, new)),
+                Ast::Quo(l, r) => quo(l.substitute(old, new.clone()), r.substitute(old, new)),
+                Ast::Pow(base, exp) => {
+                    pow(base.substitute(old, new.clone()), exp.substitute(old, new))
+                }
+                Ast::Fun(name, args) => Ast::Fun(
+                    name,
+                    args.into_iter()
+                        .map(|op| op.substitute(old, new.clone()))
+                        .collect(),
+                ),
+            }
+            .simplify()
+        }
+    }
 }
 
 pub struct OperandIterator<'a> {
@@ -269,5 +309,22 @@ mod tests {
         assert!(ast.is_free_of(&sum([int(2), sym("x")])));
         assert!(ast.is_free_of(&sym("y")));
         assert!(ast.is_free_of(&int(3)));
+    }
+
+    #[test]
+    fn does_substitution() {
+        assert_eq!(sym("x").substitute(&sym("x"), sym("y")), sym("y"));
+        assert_eq!(
+            expect_ast("x + 1")
+                .simplify()
+                .substitute(&sym("x"), sym("y")),
+            expect_ast("y + 1").simplify()
+        );
+        assert_eq!(
+            expect_ast("3*x^2 + 5*x + 9")
+                .simplify()
+                .substitute(&sym("x"), int(2)),
+            int(31)
+        );
     }
 }

@@ -544,6 +544,14 @@ impl Ast {
             pow(u, Ast::from_biguint(n))
         }
     }
+
+    pub fn binomial_coeff(n: Ast, k: Ast) -> Self {
+        quo(
+            fac(n.clone()),
+            prd([fac(k.clone()), fac(dif(n.clone(), k))]),
+        )
+        .simplify()
+    }
 }
 
 #[cfg(test)]
@@ -909,5 +917,36 @@ mod tests {
             expect_ast("(x + 1)^(5/2)").simplify().algebraic_expand(),
             expect_ast("(x + 1)^(1/2) * x^2 + 2 * (x + 1)^(1/2) * x + (x + 1)^(1/2)").simplify()
         );
+    }
+
+    #[test]
+    fn calcs_binomial_coefficient() {
+        // Some rows of Pascal's Triangle
+        assert_eq!(Ast::binomial_coeff(int(0), int(0)), int(1));
+
+        assert_eq!(Ast::binomial_coeff(int(1), int(0)), int(1));
+        assert_eq!(Ast::binomial_coeff(int(1), int(1)), int(1));
+
+        assert_eq!(Ast::binomial_coeff(int(2), int(0)), int(1));
+        assert_eq!(Ast::binomial_coeff(int(2), int(1)), int(2));
+        assert_eq!(Ast::binomial_coeff(int(2), int(2)), int(1));
+
+        assert_eq!(Ast::binomial_coeff(int(3), int(0)), int(1));
+        assert_eq!(Ast::binomial_coeff(int(3), int(1)), int(3));
+        assert_eq!(Ast::binomial_coeff(int(3), int(2)), int(3));
+        assert_eq!(Ast::binomial_coeff(int(3), int(3)), int(1));
+
+        assert_eq!(Ast::binomial_coeff(int(4), int(0)), int(1));
+        assert_eq!(Ast::binomial_coeff(int(4), int(1)), int(4));
+        assert_eq!(Ast::binomial_coeff(int(4), int(2)), int(6));
+        assert_eq!(Ast::binomial_coeff(int(4), int(3)), int(4));
+        assert_eq!(Ast::binomial_coeff(int(4), int(4)), int(1));
+
+        assert_eq!(Ast::binomial_coeff(int(5), int(0)), int(1));
+        assert_eq!(Ast::binomial_coeff(int(5), int(1)), int(5));
+        assert_eq!(Ast::binomial_coeff(int(5), int(2)), int(10));
+        assert_eq!(Ast::binomial_coeff(int(5), int(3)), int(10));
+        assert_eq!(Ast::binomial_coeff(int(5), int(4)), int(5));
+        assert_eq!(Ast::binomial_coeff(int(5), int(5)), int(1));
     }
 }

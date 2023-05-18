@@ -85,6 +85,16 @@ impl From<i128> for Ast {
         Ast::Int(BigInt::from_i128(value).unwrap())
     }
 }
+impl From<usize> for Ast {
+    fn from(value: usize) -> Self {
+        Ast::Int(BigInt::from_usize(value).unwrap())
+    }
+}
+impl From<isize> for Ast {
+    fn from(value: isize) -> Self {
+        Ast::Int(BigInt::from_isize(value).unwrap())
+    }
+}
 impl From<BigInt> for Ast {
     fn from(value: BigInt) -> Self {
         Ast::Int(value)
@@ -135,6 +145,8 @@ impl_op_ex_commutative!(+ |a: Ast, b: u64| -> Ast { sum([b.into(), a]) });
 impl_op_ex_commutative!(+ |a: Ast, b: i64| -> Ast { sum([b.into(), a]) });
 impl_op_ex_commutative!(+ |a: Ast, b: u128| -> Ast { sum([b.into(), a]) });
 impl_op_ex_commutative!(+ |a: Ast, b: i128| -> Ast { sum([b.into(), a]) });
+impl_op_ex_commutative!(+ |a: Ast, b: usize| -> Ast { sum([b.into(), a]) });
+impl_op_ex_commutative!(+ |a: Ast, b: isize| -> Ast { sum([b.into(), a]) });
 
 impl_op_ex_commutative!(*|a: Ast, b: u8| -> Ast { prd([b.into(), a]) });
 impl_op_ex_commutative!(*|a: Ast, b: i8| -> Ast { prd([b.into(), a]) });
@@ -146,6 +158,8 @@ impl_op_ex_commutative!(*|a: Ast, b: u64| -> Ast { prd([b.into(), a]) });
 impl_op_ex_commutative!(*|a: Ast, b: i64| -> Ast { prd([b.into(), a]) });
 impl_op_ex_commutative!(*|a: Ast, b: u128| -> Ast { prd([b.into(), a]) });
 impl_op_ex_commutative!(*|a: Ast, b: i128| -> Ast { prd([b.into(), a]) });
+impl_op_ex_commutative!(*|a: Ast, b: usize| -> Ast { prd([b.into(), a]) });
+impl_op_ex_commutative!(*|a: Ast, b: isize| -> Ast { prd([b.into(), a]) });
 
 impl_op_ex!(/|a: Ast, b: u8| -> Ast { quo(a, b.into()) });
 impl_op_ex!(/|a: Ast, b: i8| -> Ast { quo(a, b.into()) });
@@ -157,6 +171,8 @@ impl_op_ex!(/|a: Ast, b: u64| -> Ast { quo(a, b.into()) });
 impl_op_ex!(/|a: Ast, b: i64| -> Ast { quo(a, b.into()) });
 impl_op_ex!(/|a: Ast, b: u128| -> Ast { quo(a, b.into()) });
 impl_op_ex!(/|a: Ast, b: i128| -> Ast { quo(a, b.into()) });
+impl_op_ex!(/|a: Ast, b: usize| -> Ast { quo(a, b.into()) });
+impl_op_ex!(/|a: Ast, b: isize| -> Ast { quo(a, b.into()) });
 
 impl_op_ex!(/|a: u8, b: Ast| -> Ast { quo(a.into(), b) });
 impl_op_ex!(/|a: i8, b: Ast| -> Ast { quo(a.into(), b) });
@@ -168,6 +184,8 @@ impl_op_ex!(/|a: u64, b: Ast| -> Ast { quo(a.into(), b) });
 impl_op_ex!(/|a: i64, b: Ast| -> Ast { quo(a.into(), b) });
 impl_op_ex!(/|a: u128, b: Ast| -> Ast { quo(a.into(), b) });
 impl_op_ex!(/|a: i128, b: Ast| -> Ast { quo(a.into(), b) });
+impl_op_ex!(/|a: usize, b: Ast| -> Ast { quo(a.into(), b) });
+impl_op_ex!(/|a: isize, b: Ast| -> Ast { quo(a.into(), b) });
 
 impl_op_ex!(-|a: Ast, b: u8| -> Ast { dif(a, b.into()) });
 impl_op_ex!(-|a: Ast, b: i8| -> Ast { dif(a, b.into()) });
@@ -179,6 +197,8 @@ impl_op_ex!(-|a: Ast, b: u64| -> Ast { dif(a, b.into()) });
 impl_op_ex!(-|a: Ast, b: i64| -> Ast { dif(a, b.into()) });
 impl_op_ex!(-|a: Ast, b: u128| -> Ast { dif(a, b.into()) });
 impl_op_ex!(-|a: Ast, b: i128| -> Ast { dif(a, b.into()) });
+impl_op_ex!(-|a: Ast, b: usize| -> Ast { dif(a, b.into()) });
+impl_op_ex!(-|a: Ast, b: isize| -> Ast { dif(a, b.into()) });
 
 impl_op_ex!(-|a: u8, b: Ast| -> Ast { dif(a.into(), b) });
 impl_op_ex!(-|a: i8, b: Ast| -> Ast { dif(a.into(), b) });
@@ -190,6 +210,8 @@ impl_op_ex!(-|a: u64, b: Ast| -> Ast { dif(a.into(), b) });
 impl_op_ex!(-|a: i64, b: Ast| -> Ast { dif(a.into(), b) });
 impl_op_ex!(-|a: u128, b: Ast| -> Ast { dif(a.into(), b) });
 impl_op_ex!(-|a: i128, b: Ast| -> Ast { dif(a.into(), b) });
+impl_op_ex!(-|a: usize, b: Ast| -> Ast { dif(a.into(), b) });
+impl_op_ex!(-|a: isize, b: Ast| -> Ast { dif(a.into(), b) });
 
 #[macro_export]
 macro_rules! expr {
