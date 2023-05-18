@@ -5,6 +5,7 @@ use crate::ast::{helpers::*, Ast};
 impl Ast {
     pub(crate) fn simplify_factorial(operand: Self) -> Self {
         match operand {
+            fail @ Ast::Fail => fail,
             und @ Ast::Und => und,
             ref int_op @ Ast::Int(ref int_val) => {
                 if int_val.is_zero() {

@@ -3,10 +3,11 @@ use crate::{
         helpers::{dif, fac, int, pow, prd, quo, sum},
         Ast,
     },
+    expr,
     rational::NumDen,
 };
 
-use num::{bigint::ToBigInt, BigInt, BigRational, BigUint, FromPrimitive, ToPrimitive, Zero};
+use num::{bigint::ToBigInt, BigInt, BigRational, BigUint, FromPrimitive, One, ToPrimitive, Zero};
 use std::{borrow::Borrow, collections::BTreeSet};
 
 #[derive(PartialEq, Debug)]
@@ -40,7 +41,7 @@ impl Ast {
     pub fn vars_gpe(&self) -> BTreeSet<Ast> {
         match self {
             // VAR-1
-            Ast::Und | Ast::Int(_) | Ast::Frc(_) => BTreeSet::new(),
+            Ast::Fail | Ast::Und | Ast::Int(_) | Ast::Frc(_) => BTreeSet::new(),
 
             // VAR-2
             pow @ Ast::Pow(base, exp) => {
@@ -549,7 +550,14 @@ impl Ast {
 mod tests {
     use std::collections::BTreeSet;
 
-    use crate::{ast::helpers::*, helpers::expect_ast, polynomial::CoeffVar};
+    use num::{BigUint, FromPrimitive};
+
+    use crate::{
+        ast::{helpers::*, Ast},
+        expr,
+        helpers::expect_ast,
+        polynomial::CoeffVar,
+    };
 
     #[test]
     fn identifies_monomial_gpe() {

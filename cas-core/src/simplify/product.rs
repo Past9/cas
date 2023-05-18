@@ -213,7 +213,8 @@ impl Ast {
     /// Otherwise returns `(self, 1)`.
     fn as_power_operands(&self) -> (Cow<Ast>, Cow<Ast>) {
         match self {
-            operand @ (Ast::Und
+            operand @ (Ast::Fail
+            | Ast::Und
             | Ast::Sym(_)
             | Ast::Int(_)
             | Ast::Frc(_)

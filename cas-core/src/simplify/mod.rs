@@ -15,7 +15,7 @@ pub(super) mod sum;
 impl Ast {
     pub fn simplify(self) -> Self {
         match self {
-            ast @ (Ast::Und | Ast::Sym(_) | Ast::Int(_)) => ast,
+            ast @ (Ast::Fail | Ast::Und | Ast::Sym(_) | Ast::Int(_)) => ast,
             Ast::Frc(frc) => Self::simplify_fraction(frc),
             Ast::Neg(operand) => Self::simplify_negation((*operand).simplify()),
             Ast::Fac(operand) => Self::simplify_factorial((*operand).simplify()),
@@ -153,6 +153,7 @@ impl PartialOrd for Ast {
 
             (s @ Ast::Sym(..), o @ Ast::Fun(..)) => o.partial_cmp(s).map(Ordering::reverse),
 
+            (Ast::Fail, _) | (_, Ast::Fail) => panic!("Cannot sort failure"),
             (Ast::Und, _) | (_, Ast::Und) => panic!("Cannot sort undefined"),
             (Ast::Neg(..), _) | (_, Ast::Neg(..)) => panic!("Cannot sort negation"),
             (Ast::Dif(..), _) | (_, Ast::Dif(..)) => panic!("Cannot sort subtraction"),

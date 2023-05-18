@@ -213,7 +213,8 @@ impl Ast {
     /// Otherwise, returns `(self, 1)`.
     fn as_multiple(&self) -> (Cow<Ast>, Cow<Ast>) {
         match self {
-            operand @ (Ast::Und
+            operand @ (Ast::Fail
+            | Ast::Und
             | Ast::Sym(_)
             | Ast::Int(_)
             | Ast::Frc(_)

@@ -34,6 +34,13 @@ impl Ast {
         }
     }
 
+    pub fn is_fail(&self) -> bool {
+        match self {
+            Ast::Fail => true,
+            _ => false,
+        }
+    }
+
     pub fn is_pos_int(&self) -> bool {
         match self {
             Ast::Int(int) => int.is_positive(),
@@ -130,6 +137,21 @@ impl Ast {
         OperandIterator::new(self)
     }
 
+    pub fn number_of_operands(&self) -> usize {
+        match self {
+            Ast::Fail | Ast::Und | Ast::Sym(_) | Ast::Int(_) | Ast::Frc(_) => 0,
+
+            Ast::Neg(_) => 1,
+            Ast::Fac(_) => 1,
+            Ast::Sum(operands) => operands.len(),
+            Ast::Prd(operands) => operands.len(),
+            Ast::Dif(_, _) => 2,
+            Ast::Quo(_, _) => 2,
+            Ast::Pow(_, _) => 2,
+            Ast::Fun(_, args) => args.len(),
+        }
+    }
+
     pub fn has(&self, ast: &Ast) -> bool {
         !self.is_free_of(ast)
     }
@@ -139,7 +161,7 @@ impl Ast {
             return false;
         } else {
             match self {
-                Ast::Und | Ast::Sym(_) | Ast::Int(_) | Ast::Frc(_) => true,
+                Ast::Fail | Ast::Und | Ast::Sym(_) | Ast::Int(_) | Ast::Frc(_) => true,
 
                 Ast::Neg(operand) => operand.is_free_of(ast),
                 Ast::Fac(operand) => operand.is_free_of(ast),
@@ -168,6 +190,7 @@ impl<'a> Iterator for OperandIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let item: Option<Self::Item> = match self.ast {
+            Ast::Fail => None,
             Ast::Und => None,
             Ast::Sym(_) => None,
             Ast::Int(_) => None,

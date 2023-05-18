@@ -96,7 +96,7 @@ mod tests {
         );
 
         assert_eq!(
-            expect_ast("5*x^2 + 3^x + 6").simplify().deriv(sym("x")),
+            expect_ast("5*x^2 + 3*x + 6").simplify().deriv(sym("x")),
             expect_ast("10*x + 3").simplify()
         );
     }

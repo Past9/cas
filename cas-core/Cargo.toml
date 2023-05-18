@@ -11,3 +11,4 @@ rust_decimal = "1.29.1"
 rust_decimal_macros = "1.29.1"
 num = { version = "0.4.0" }
 vec1 = "1.10.1"
+auto_ops = "0.3.0"

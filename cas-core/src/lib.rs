@@ -7,6 +7,7 @@ mod polynomial;
 mod rational;
 mod simplify;
 mod tokenize;
+mod trigonometry;
 
 use std::collections::BTreeMap;
 

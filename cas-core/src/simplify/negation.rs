@@ -5,6 +5,7 @@ use crate::ast::{helpers::*, Ast};
 impl Ast {
     pub(crate) fn simplify_negation(operand: Self) -> Self {
         match operand {
+            fail @ Self::Fail => fail,
             und @ Self::Und => und,
             Self::Int(int) => Self::from_int(int.neg()),
             Self::Frc(frc) => Self::from_frac(frc.neg()),
